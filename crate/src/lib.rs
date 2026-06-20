@@ -31,6 +31,7 @@ extern "C" {
     fn rs_scal_save(name: *const c_char, v: c_double) -> c_int;
     fn rs_mat_store(name: *const c_char, r: c_int, c: c_int, v: c_double) -> c_int;
     fn rs_macro_use(name: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
+    fn rs_macro_save(name: *const c_char, text: *const c_char) -> c_int;
     fn rs_sdatalen(var: c_int, obs: c_int) -> c_int;
     fn rs_var_is_strl(var: c_int) -> c_int;
     fn rs_sdata(var: c_int, obs: c_int, buf: *mut c_char) -> c_int;
@@ -55,6 +56,12 @@ fn save_scalar(name: &str, v: f64) {
 fn mat_store(name: &str, r: usize, c: usize, v: f64) {
     if let Ok(cn) = CString::new(name) {
         unsafe { rs_mat_store(cn.as_ptr(), r as c_int, c as c_int, v) };
+    }
+}
+/// Save a Stata global macro (name without a leading underscore -> global).
+fn macro_save(name: &str, text: &str) {
+    if let (Ok(n), Ok(t)) = (CString::new(name), CString::new(text)) {
+        unsafe { rs_macro_save(n.as_ptr(), t.as_ptr()) };
     }
 }
 /// Read a Stata global macro by name (empty if unset).
@@ -280,6 +287,13 @@ fn fit_op(a: &[String]) -> c_int {
         err("fastm: too few documents/terms after tokenization\n");
         return 198;
     }
+    if k > v {
+        err(&format!(
+            "fastm: k ({}) exceeds the vocabulary size ({}); reduce k() or relax preprocessing\n",
+            k, v
+        ));
+        return 198;
+    }
     say(&format!(
         "fastm: corpus = {} docs, {} terms, {} tokens; fitting K={} ...\n",
         d,
@@ -388,6 +402,27 @@ fn fit_op(a: &[String]) -> c_int {
     // FREX labels + coherence/exclusivity diagnostics (topica_core::inspect).
     let frex = inspect::frex_scores(&model.beta, &corpus.total_freqs, 0.5);
     let labels = inspect::top_words(&frex, 8usize.min(v));
+
+    // estat labels: save prob/frex/lift/score top words per topic as globals.
+    let nlab = 10usize.min(v);
+    let join_words = |ids: &[usize]| {
+        ids.iter()
+            .map(|&w| corpus.id_to_word[w].as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let prob_top = inspect::top_words(&model.beta, nlab);
+    let lift = inspect::lift_scores(&model.beta, &corpus.total_freqs);
+    let lift_top = inspect::top_words(&lift, nlab);
+    let score = inspect::score_scores(&model.beta);
+    let score_top = inspect::top_words(&score, nlab);
+    let frex_top = inspect::top_words(&frex, nlab);
+    for t in 0..k {
+        macro_save(&format!("fastm_lbl_prob_{}", t + 1), &join_words(&prob_top[t]));
+        macro_save(&format!("fastm_lbl_frex_{}", t + 1), &join_words(&frex_top[t]));
+        macro_save(&format!("fastm_lbl_lift_{}", t + 1), &join_words(&lift_top[t]));
+        macro_save(&format!("fastm_lbl_score_{}", t + 1), &join_words(&score_top[t]));
+    }
     let mm = 10usize.min(v);
     let coh = inspect::semantic_coherence(&model.beta, &corpus.docs, mm);
     let excl = inspect::exclusivity(&model.beta, mm, 0.7);
@@ -557,6 +592,13 @@ fn searchk_op(a: &[String]) -> c_int {
     let v = corpus.num_types();
     if corpus.num_docs() < 2 || v < 2 {
         err("fastm: too few documents/terms after tokenization\n");
+        return 198;
+    }
+    if k > v {
+        err(&format!(
+            "fastm: k ({}) exceeds the vocabulary size ({})\n",
+            k, v
+        ));
         return 198;
     }
 

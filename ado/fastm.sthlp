@@ -171,6 +171,10 @@ one equation per topic), so the usual tools apply:{p_end}
 {pstd}Representative documents for a topic (highest topic proportion):{p_end}
 {phang2}{cmd:. estat thoughts, topic(}{it:#}{cmd:)} [{cmd:n(}{it:#}{cmd:)}]{p_end}
 
+{pstd}Redisplay topic labels by score type ({cmd:prob}, {cmd:frex}, {cmd:lift},
+{cmd:score}):{p_end}
+{phang2}{cmd:. estat labels} [{cmd:, type(}{it:t}{cmd:) n(}{it:#}{cmd:) topic(}{it:#}{cmd:)}]{p_end}
+
 {pstd}{cmd:predict} after {cmd:fastm} (one topic per call):{p_end}
 {synoptset 30 tabbed}{...}
 {synopt:{cmd:predict} {it:nv}{cmd:, xb topic(}{it:#}{cmd:)}}estimateEffect linear prediction{p_end}

@@ -109,6 +109,9 @@ program fastm, eclass
         matrix fastm_gamma = J(1 + `nprev', `k' - 1, .)
     }
 
+    // Clear any stale labels from a previous fit (the plugin repopulates them).
+    capture macro drop fastm_lbl_*
+
     // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence (K+2..).
     plugin call fastmplugin `varlist' `generate'1-`generate'`k' `prevvars' ///
         if `touse', fit `k' `seed' `iters' `nprev' `mindocfreq' `maxdocpct' `lower' `heldout' `nstart'
@@ -210,9 +213,41 @@ program fastm_estat
     if "`sub'" == "thoughts" {
         fastm_thoughts `0'
     }
+    else if "`sub'" == "labels" {
+        fastm_labels `0'
+    }
     else {
         di as error `"unknown estat subcommand "`sub'""'
         exit 198
+    }
+end
+
+// estat labels: redisplay topic labels by score type (prob/frex/lift/score).
+program fastm_labels
+    version 15.0
+    syntax , [ Type(string) N(integer 7) Topic(integer 0) ]
+    if "`e(cmd)'" != "fastm" {
+        di as error "fastm results not found"
+        exit 301
+    }
+    if "`type'" == "" local type frex
+    if !inlist("`type'", "prob", "frex", "lift", "score") {
+        di as error "type() must be prob, frex, lift, or score"
+        exit 198
+    }
+    local kk = e(k)
+    di ""
+    di as txt "Topic labels (`type', top `n')"
+    forvalues t = 1/`kk' {
+        if `topic' == 0 | `topic' == `t' {
+            local words "${fastm_lbl_`type'_`t'}"
+            local show ""
+            forvalues j = 1/`n' {
+                local w : word `j' of `words'
+                if "`w'" != "" local show `show' `w'
+            }
+            di as txt "Topic " %2.0f `t' ":  " as result "`show'"
+        }
     }
 end
 
