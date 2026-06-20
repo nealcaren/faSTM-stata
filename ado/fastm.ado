@@ -131,6 +131,7 @@ program fastm, eclass
     // column (not part of the prevalence design).
     local ng 0
     local cgrp ""
+    capture macro drop fastm_clev_*
     if "`content'" != "" {
         tempvar cgrp
         egen `cgrp' = group(`content') if `touse'
@@ -140,6 +141,19 @@ program fastm, eclass
         if `ng' < 2 {
             di as error "content() needs at least 2 groups"
             exit 198
+        }
+        // Record level names (group() codes by sorted value) for estat perspectives.
+        capture confirm numeric variable `content'
+        local cnum = (_rc == 0)
+        levelsof `content' if `touse', local(_clevs)
+        local _gi = 0
+        foreach _lv of local _clevs {
+            if `cnum' {
+                local _lab : label (`content') `_lv'
+                global fastm_clev_`_gi' `"`_lab'"'
+            }
+            else global fastm_clev_`_gi' `"`_lv'"'
+            local ++_gi
         }
         quietly replace `cgrp' = `cgrp' - 1   // 0-based for the engine
     }
@@ -167,8 +181,9 @@ program fastm, eclass
         matrix fastm_gamma = J(1 + `nprev', `k' - 1, .)
     }
 
-    // Clear any stale labels from a previous fit (the plugin repopulates them).
+    // Clear any stale labels/perspectives from a previous fit (plugin repopulates).
     capture macro drop fastm_lbl_*
+    capture macro drop fastm_persp_*
 
     // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence,
     // then the content group var (last) when content() is used.
@@ -279,9 +294,46 @@ program fastm_estat
     else if "`sub'" == "labels" {
         fastm_labels `0'
     }
+    else if "`sub'" == "perspectives" {
+        fastm_perspectives `0'
+    }
     else {
         di as error `"unknown estat subcommand "`sub'""'
         exit 198
+    }
+end
+
+// estat perspectives: for a content model, the words each content level emphasizes
+// in a topic (the SAGE deviation, as stm's sageLabels). Shows the per-group contrast.
+program fastm_perspectives
+    version 15.0
+    syntax , Topic(integer) [ N(integer 7) ]
+    if "`e(cmd)'" != "fastm" {
+        di as error "fastm results not found"
+        exit 301
+    }
+    if e(n_content) == 0 {
+        di as error "estat perspectives requires a content() covariate"
+        exit 198
+    }
+    local kk = e(k)
+    if `topic' < 1 | `topic' > `kk' {
+        di as error "topic() must be in 1..`kk'"
+        exit 198
+    }
+    local ng = e(n_content)
+    di ""
+    di as txt "Topic `topic' by content level (`e(content)'): distinctive words"
+    forvalues g = 0/`=`ng' - 1' {
+        local nm "${fastm_clev_`g'}"
+        if `"`nm'"' == "" local nm "level `g'"
+        local words "${fastm_persp_`g'_`topic'}"
+        local show ""
+        forvalues j = 1/`n' {
+            local w : word `j' of `words'
+            if "`w'" != "" local show `show' `w'
+        }
+        di as txt %-16s abbrev(`"`nm'"', 15) "  " as result "`show'"
     }
 end
 

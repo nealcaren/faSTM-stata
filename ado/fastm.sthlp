@@ -194,6 +194,10 @@ one equation per topic), so the usual tools apply:{p_end}
 {cmd:score}):{p_end}
 {phang2}{cmd:. estat labels} [{cmd:, type(}{it:t}{cmd:) n(}{it:#}{cmd:) topic(}{it:#}{cmd:)}]{p_end}
 
+{pstd}After a {opt content()} model, the words each content level emphasizes in a
+topic (the per-group contrast):{p_end}
+{phang2}{cmd:. estat perspectives, topic(}{it:#}{cmd:)} [{cmd:n(}{it:#}{cmd:)}]{p_end}
+
 {pstd}{cmd:predict} after {cmd:fastm} (one topic per call):{p_end}
 {synoptset 30 tabbed}{...}
 {synopt:{cmd:predict} {it:nv}{cmd:, xb topic(}{it:#}{cmd:)}}estimateEffect linear prediction{p_end}

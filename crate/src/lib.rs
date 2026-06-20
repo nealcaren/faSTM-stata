@@ -447,6 +447,29 @@ fn fit_op(a: &[String]) -> c_int {
         macro_save(&format!("fastm_lbl_lift_{}", t + 1), &join_words(&lift_top[t]));
         macro_save(&format!("fastm_lbl_score_{}", t + 1), &join_words(&score_top[t]));
     }
+
+    // estat perspectives: for a content model, the words each level emphasizes in
+    // each topic, ranked by the SAGE deviation (kappa_cov + kappa_interaction),
+    // the same information stm's sageLabels() uses. Saved as globals per (level, topic).
+    if let Some(ck) = &model.content_kappa {
+        let g = model.num_groups;
+        for t in 0..k {
+            for lev in 0..g {
+                let row = &ck.kappa_interaction[t * g + lev];
+                let mut scored: Vec<(f64, usize)> = (0..v)
+                    .map(|w| (ck.kappa_cov[lev][w] + row[w], w))
+                    .collect();
+                scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+                let words = scored
+                    .iter()
+                    .take(nlab)
+                    .map(|&(_, w)| corpus.id_to_word[w].as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                macro_save(&format!("fastm_persp_{}_{}", lev, t + 1), &words);
+            }
+        }
+    }
     let mm = 10usize.min(v);
     let coh = inspect::semantic_coherence(&model.beta, &corpus.docs, mm);
     let excl = inspect::exclusivity(&model.beta, mm, 0.7);
