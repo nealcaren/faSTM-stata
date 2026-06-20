@@ -61,6 +61,7 @@ program stmata, eclass
     if `nprev' > 0 {
         matrix stmata_eb = J(1, `k'*`nprev', .)
         matrix stmata_eV = J(`k'*`nprev', `k'*`nprev', 0)
+        matrix stmata_gamma = J(1 + `nprev', `k' - 1, .)
     }
 
     // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence (K+2..).
@@ -98,6 +99,17 @@ program stmata, eclass
     ereturn local textvar    "`varlist'"
     ereturn local cmd        "stmata"
 
+    if `nprev' > 0 {
+        local gcols ""
+        forvalues t = 1/`=`k'-1' {
+            local gcols "`gcols' topic`t'"
+        }
+        matrix rownames stmata_gamma = _cons `collabels'
+        matrix colnames stmata_gamma = `gcols'
+        ereturn matrix gamma = stmata_gamma
+        ereturn local predict "stmata_predict"
+    }
+
     stmata_display
 end
 
@@ -122,6 +134,84 @@ program stmata_display
         di as txt "Covariate effects on topic proportions (method of composition)"
         ereturn display
     }
+end
+
+// predict after stmata (xtreg-style). One topic per call via topic(#).
+//   pr (default) : prevalence-fitted topic proportion, softmax([X*gamma, 0])
+//   xb           : prevalence linear predictor for the topic (reference topic = 0)
+program stmata_predict
+    version 15.0
+    syntax newvarname [if] [in] , [ PRoportions XB Topic(integer 0) ]
+
+    if "`e(cmd)'" != "stmata" {
+        di as error "stmata estimation results not found"
+        exit 301
+    }
+    if "`e(prevalence)'" == "" {
+        di as error "predict after stmata requires a model fit with prevalence()"
+        exit 459
+    }
+    local kk = e(k)
+    if `topic' < 1 | `topic' > `kk' {
+        di as error "topic() must be an integer in 1..`kk'"
+        exit 198
+    }
+    local stat proportions
+    if "`xb'" != "" {
+        if "`proportions'" != "" {
+            di as error "specify only one of pr or xb"
+            exit 198
+        }
+        local stat xb
+    }
+
+    marksample touse, novarlist
+
+    // Rebuild the design columns in gamma's row order: kept (non-base/omitted)
+    // prevalence terms; the intercept is added inside Mata.
+    fvexpand `e(prevalence)'
+    local expnames `r(varlist)'
+    fvrevar `e(prevalence)'
+    local revars `r(varlist)'
+    local prevvars ""
+    local i 0
+    foreach nm of local expnames {
+        local ++i
+        local tv : word `i' of `revars'
+        if !strmatch("`nm'", "*b.*") & !strmatch("`nm'", "*o.*") local prevvars `prevvars' `tv'
+    }
+
+    tempname G
+    matrix `G' = e(gamma)
+    quietly generate double `varlist' = .
+    mata: stmata_pred("`varlist'", "`touse'", "`prevvars'", "`G'", `topic', `kk', "`stat'")
+end
+
+mata:
+void stmata_pred(string scalar newvar, string scalar touse, string scalar prevvars,
+                 string scalar Gname, real scalar topic, real scalar K, string scalar stat)
+{
+    real matrix G, Xcov, X, XB, full, Pr, yv, e
+    real colvector out, m, s
+    G = st_matrix(Gname)                         // (1+ncov) x (K-1)
+    st_view(Xcov = ., ., tokens(prevvars), touse)
+    n = rows(Xcov)
+    X = (J(n, 1, 1), Xcov)                        // intercept + covariates
+    XB = X * G                                    // N x (K-1)
+    if (stat == "xb") {
+        out = (topic < K ? XB[, topic] : J(n, 1, 0))
+    }
+    else {
+        full = (XB, J(n, 1, 0))                   // reference topic = 0
+        m = rowmax(full)
+        e = exp(full :- m)
+        s = rowsum(e)
+        Pr = e :/ s
+        out = Pr[, topic]
+    }
+    st_view(yv = ., ., newvar, touse)
+    yv[., .] = out
+}
 end
 
 // --------------------------------------------------------------------------

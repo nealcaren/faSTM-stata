@@ -282,6 +282,14 @@ fn fit_op(a: &[String]) -> c_int {
                     }
                 }
             }
+            // Save the prevalence coefficients gamma (P x (K-1)) for predict.
+            if let Some(g) = &model.gamma {
+                for (pi, row) in g.iter().enumerate() {
+                    for (ti, &val) in row.iter().enumerate() {
+                        mat_store("stmata_gamma", pi + 1, ti + 1, val);
+                    }
+                }
+            }
             say(&format!(
                 "stmata: estimateEffect done ({} term(s), {} draws, method of composition)\n",
                 nprev, nsims
