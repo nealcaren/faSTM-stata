@@ -3,6 +3,7 @@ crate/target/
 
 # build artifacts (root dev build only; per-OS release plugins live in ado/)
 build/*.o
+build/*.plugin
 /fastm.plugin
 
 # Stata
