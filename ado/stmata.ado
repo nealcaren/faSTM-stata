@@ -1,4 +1,4 @@
-*! stmata 0.4.0  Structural Topic Models in Stata (engine: topica-core, Rust)
+*! stmata 0.5.0  Structural Topic Models in Stata (engine: topica-core, Rust)
 *! stmata textvar [if] [in], k(#) [prevalence(fvvarlist) seed(#) iters(#) generate(name) replace]
 program stmata, eclass
     version 15.0
@@ -23,12 +23,10 @@ program stmata, eclass
     }
     if "`generate'" == "" local generate theta
 
-    // Sample: honors if/in and drops empty/missing text.
     marksample touse, strok
 
-    // Expand factor/time-series prevalence into numeric design columns. fvrevar
-    // gives one tempvar per fvexpand term (base/omitted included), so we drop the
-    // base (`b.`) and omitted (`o.`) terms — the plugin adds its own intercept.
+    // Expand factor/time-series prevalence into numeric design columns; drop the
+    // base (`b.`)/omitted (`o.`) terms so they don't collide with the intercept.
     local prevvars ""
     local collabels ""
     if "`prevalence'" != "" {
@@ -49,7 +47,6 @@ program stmata, eclass
     }
     local nprev : word count `prevvars'
 
-    // Create the K topic-proportion variables the plugin writes into.
     forvalues t = 1/`k' {
         capture confirm new variable `generate'`t'
         if _rc & "`replace'" == "" {
@@ -60,17 +57,33 @@ program stmata, eclass
         quietly generate double `generate'`t' = .
     }
 
-    // estimateEffect output matrices the plugin fills (k topics x nprev covariates).
+    // estimateEffect outputs: e(b) row (1 x k*nprev), e(V) (k*nprev square).
     if `nprev' > 0 {
-        matrix stmata_b  = J(`k', `nprev', .)
-        matrix stmata_se = J(`k', `nprev', .)
+        matrix stmata_eb = J(1, `k'*`nprev', .)
+        matrix stmata_eV = J(`k'*`nprev', `k'*`nprev', 0)
     }
 
     // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence (K+2..).
     plugin call stmataplugin `varlist' `generate'1-`generate'`k' `prevvars' ///
         if `touse', fit `k' `seed' `iters' `nprev'
 
-    ereturn clear
+    // Post e(b)/e(V) so test/lincom/ereturn display work. Equation = topic#,
+    // coefficient = prevalence term (matches the plugin's fill order: topic, term).
+    if `nprev' > 0 {
+        local bn ""
+        forvalues t = 1/`k' {
+            foreach nm of local collabels {
+                local bn `bn' topic`t':`nm'
+            }
+        }
+        matrix colnames stmata_eb = `bn'
+        matrix rownames stmata_eV = `bn'
+        matrix colnames stmata_eV = `bn'
+        ereturn post stmata_eb stmata_eV, esample(`touse')
+    }
+    else {
+        ereturn clear
+    }
     ereturn scalar k            = scalar(stmata_K)
     ereturn scalar n_terms      = scalar(stmata_V)
     ereturn scalar N_docs       = scalar(stmata_D)
@@ -85,23 +98,10 @@ program stmata, eclass
     ereturn local textvar    "`varlist'"
     ereturn local cmd        "stmata"
 
-    if `nprev' > 0 {
-        local rn ""
-        forvalues t = 1/`k' {
-            local rn "`rn' topic`t'"
-        }
-        matrix rownames stmata_b  = `rn'
-        matrix rownames stmata_se = `rn'
-        capture matrix colnames stmata_b  = `collabels'
-        capture matrix colnames stmata_se = `collabels'
-        ereturn matrix effects_se = stmata_se
-        ereturn matrix effects    = stmata_b
-    }
-
     stmata_display
 end
 
-// Display the stored results (used by estimation and by replay). Reads e() only.
+// Display the stored results (estimation and replay). Reads e() only.
 program stmata_display
     di ""
     di as txt "Structural Topic Model" ///
@@ -120,21 +120,7 @@ program stmata_display
     if e(n_prevalence) > 0 {
         di ""
         di as txt "Covariate effects on topic proportions (method of composition)"
-        tempname B SE
-        matrix `B'  = e(effects)
-        matrix `SE' = e(effects_se)
-        local terms `e(prev_terms)'
-        local ci = 0
-        foreach nm of local terms {
-            local ++ci
-            di as txt "Term " as res "`nm'" as txt ":"
-            di as txt "    topic {c |}       coef         se"
-            di as txt "    {hline 6}{c +}{hline 24}"
-            forvalues t = 1/`=e(k)' {
-                di as txt "    " %5.0f `t' " {c |} " ///
-                    as res %10.4f `B'[`t',`ci'] "  " %10.4f `SE'[`t',`ci']
-            }
-        }
+        ereturn display
     }
 end
 

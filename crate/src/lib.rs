@@ -267,16 +267,23 @@ fn fit_op(a: &[String]) -> c_int {
         if let Some(xref) = prevalence.as_deref() {
             let mut eff_rng = ChaCha8Rng::seed_from_u64(seed ^ 0x9E37_79B9_7F4A_7C15);
             let nsims = 100usize;
+            let pdim = nprev + 1; // intercept + covariates
+            // Fill the e(b) row (1 x k*nprev) and the block-diagonal e(V).
             for t in 0..k {
-                let (coef, se) =
-                    effects::estimate_effect_topic(&model.lambda, &model.nu, xref, t, nsims, &mut eff_rng);
+                let (coef, vcov) = effects::estimate_effect_topic(
+                    &model.lambda, &model.nu, xref, t, nsims, &mut eff_rng,
+                );
                 for ci in 1..=nprev {
-                    mat_store("stmata_b", t + 1, ci, coef[ci]);
-                    mat_store("stmata_se", t + 1, ci, se[ci]);
+                    let r = (t * nprev + (ci - 1) + 1) as c_int; // 1-based
+                    mat_store("stmata_eb", 1, r as usize, coef[ci]);
+                    for cj in 1..=nprev {
+                        let c = (t * nprev + (cj - 1) + 1) as c_int;
+                        mat_store("stmata_eV", r as usize, c as usize, vcov[ci * pdim + cj]);
+                    }
                 }
             }
             say(&format!(
-                "stmata: estimateEffect done ({} covariate(s), {} draws, method of composition)\n",
+                "stmata: estimateEffect done ({} term(s), {} draws, method of composition)\n",
                 nprev, nsims
             ));
         }
