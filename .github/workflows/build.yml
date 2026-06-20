@@ -18,7 +18,7 @@ jobs:
           - os: ubuntu-latest
             name: linux-x86_64
           - os: macos-latest
-            name: macos-x86_64
+            name: macos-universal
           - os: windows-latest
             name: windows-x86_64
     steps:

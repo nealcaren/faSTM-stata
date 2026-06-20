@@ -89,7 +89,7 @@ end
 capture findfile fastm.plugin
 if _rc {
     if "`c(os)'" == "Windows"      local _fpl fastm-windows-x86_64.plugin
-    else if strpos("`c(machine_type)'", "Mac") local _fpl fastm-macos-x86_64.plugin
+    else if strpos("`c(machine_type)'", "Mac") local _fpl fastm-macos.plugin
     else                            local _fpl fastm-linux-x86_64.plugin
     capture findfile `_fpl'
 }
