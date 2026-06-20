@@ -7,9 +7,9 @@ labels, diagnostics, and covariate-effect estimation all run in a compiled
 plugin, so **no Python and no Rust toolchain are needed to use it**: you install
 an ado/Mata package plus a precompiled `fastm.plugin`.
 
-> Status: **working, pre-1.0.** A full estimation command, validated in Stata 15.1.
-> Not yet packaged for `net install` / SSC, and not yet parity-checked
-> against R `stm` on a real corpus (see the roadmap below).
+> Status: **working, pre-1.0.** A full estimation command, validated in Stata
+> 15.1 and parity-checked against R `stm` on poliblog. Not yet packaged for
+> `net install` / SSC (see the roadmap below).
 
 ## What it does
 
@@ -51,6 +51,9 @@ machinery works:
 
 - **Fit** an STM from a Stata string variable (one document per observation);
   honors `if`/`in`.
+- **Preprocessing controls**: `stopwords(none|english|"file")`, `mindocfreq()`,
+  `maxdocpct()`, `nolowercase`: transparent vocabulary formation (stm's
+  `prepDocuments`).
 - **Prevalence covariates** with full factor-variable syntax: `i.party`,
   `c.year`, interactions `i.party##c.year`.
 - **Labels and diagnostics**: FREX / probability / lift / score, semantic
@@ -59,7 +62,11 @@ machinery works:
   `e(b)` / `e(V)`, so `test`, `lincom`, `margins`, and `marginsplot` all work.
 - **predict** (xtreg-style): `pr` (model prevalence-fitted proportion), `xb`,
   `stdp`, with `topic(#)`.
-- **Replay** (bare `fastm`) and a full **help file**.
+- **`searchk`**: choose K by held-out document completion (held-out
+  log-likelihood + coherence + exclusivity + bound) in `r(table)`.
+- **Save the model**: `saving()` writes topic-word probabilities + vocabulary to
+  a dataset.
+- **Replay** (bare `fastm`) and full **help files** (`help fastm`, `help searchk`).
 
 ## Build
 
@@ -108,16 +115,26 @@ keeps the speed and reuses one cross-validated codebase.
 crate/        Rust plugin (lib.rs) + the C shim (shim.c) over StataCorp's interface
 vendor/       StataCorp's stplugin.c / stplugin.h, unmodified (see vendor/NOTICE.md)
 build/        build.sh: compiles + links fastm.plugin for x86_64 (macOS / Linux)
-ado/          fastm.ado, fastm.sthlp (the command + help)
+ado/          fastm.ado/.sthlp, searchk.ado/.sthlp, fastm_english.stops
 examples/     *.do demos (fit, covariates, factor vars, margins)
-docs/         design + notes
+tests/parity/ real-corpus parity vs R stm/faSTM on poliblog
+docs/         design notes + the Stata Journal readiness plan
 ```
 
-## Roadmap
+## Status and roadmap
 
+Done: fitting, preprocessing controls, prevalence with factor variables,
+labels/diagnostics, estimateEffect with `e(b)`/`e(V)` (test/lincom/margins),
+`predict`, `searchk`, `saving()`, replay, help files, and real-corpus parity vs
+R `stm` on poliblog.
+
+Next (see [docs/STATA_JOURNAL_READINESS.md](docs/STATA_JOURNAL_READINESS.md)):
+
+- `estat thoughts` (representative documents), `e(sigma)` topic correlations,
+  standalone held-out likelihood, `nstart()` multi-start.
 - **Content / SAGE covariates** (`content()`): the other half of STM.
-- **Real-corpus parity** vs R `stm` on poliblog (mirroring faSTM's validation).
-- **Packaging**: ship prebuilt macOS + Linux plugins, `net install` / SSC.
+- **Packaging**: ship prebuilt macOS + Linux (and Windows) plugins, `net install`
+  / SSC.
 - A Stata Journal article introducing the command.
 
 ## Relation to faSTM and topica
