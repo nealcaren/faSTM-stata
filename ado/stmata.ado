@@ -1,9 +1,9 @@
-*! stmata 0.2.0  Structural Topic Models in Stata (engine: topica-core, Rust)
-*! stmata textvar [if] [in], k(#) [prevalence(varlist) seed(#) iters(#) generate(name) replace]
+*! stmata 0.3.0  Structural Topic Models in Stata (engine: topica-core, Rust)
+*! stmata textvar [if] [in], k(#) [prevalence(fvvarlist) seed(#) iters(#) generate(name) replace]
 program stmata, eclass
     version 15.0
     syntax varname [if] [in], K(integer) ///
-        [ PREValence(varlist numeric) SEED(integer 42) ITERs(integer 200) ///
+        [ PREValence(varlist fv ts) SEED(integer 42) ITERs(integer 200) ///
           GENerate(name) replace ]
 
     if `k' < 2 {
@@ -11,11 +11,32 @@ program stmata, eclass
         exit 198
     }
     if "`generate'" == "" local generate theta
-    local nprev : word count `prevalence'
 
-    // Sample: honors if/in, drops empty/missing text and any missing covariate.
+    // Sample: honors if/in and drops empty/missing text.
     marksample touse, strok
-    if "`prevalence'" != "" markout `touse' `prevalence'
+
+    // Expand factor/time-series prevalence into numeric design columns. fvrevar
+    // gives one tempvar per fvexpand term (base/omitted included), so we drop the
+    // base (`b.`) and omitted (`o.`) terms — the plugin adds its own intercept.
+    local prevvars ""
+    local collabels ""
+    if "`prevalence'" != "" {
+        fvexpand `prevalence'
+        local expnames `r(varlist)'
+        fvrevar `prevalence'
+        local revars `r(varlist)'
+        local i 0
+        foreach nm of local expnames {
+            local ++i
+            local tv : word `i' of `revars'
+            if !strmatch("`nm'", "*b.*") & !strmatch("`nm'", "*o.*") {
+                local prevvars  `prevvars'  `tv'
+                local collabels `collabels' `nm'
+            }
+        }
+        markout `touse' `prevvars'
+    }
+    local nprev : word count `prevvars'
 
     // Create the K topic-proportion variables the plugin writes into.
     forvalues t = 1/`k' {
@@ -35,7 +56,7 @@ program stmata, eclass
     }
 
     // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence (K+2..).
-    plugin call stmataplugin `varlist' `generate'1-`generate'`k' `prevalence' ///
+    plugin call stmataplugin `varlist' `generate'1-`generate'`k' `prevvars' ///
         if `touse', fit `k' `seed' `iters' `nprev'
 
     ereturn clear
@@ -58,9 +79,9 @@ program stmata, eclass
             local rn "`rn' topic`t'"
         }
         matrix rownames stmata_b  = `rn'
-        matrix colnames stmata_b  = `prevalence'
         matrix rownames stmata_se = `rn'
-        matrix colnames stmata_se = `prevalence'
+        capture matrix colnames stmata_b  = `collabels'
+        capture matrix colnames stmata_se = `collabels'
         ereturn matrix effects_se = stmata_se
         ereturn matrix effects    = stmata_b
     }
@@ -72,7 +93,7 @@ program stmata, eclass
         _col(48) "Vocabulary     = " as res %9.0fc e(n_terms)
     di as txt _col(48) "Topics (K)     = " as res %9.0fc e(k)
     if `nprev' > 0 ///
-        di as txt _col(48) "Prevalence     = " as res %9.0fc e(n_prevalence) as txt " covariate(s)"
+        di as txt _col(48) "Prevalence     = " as res %9.0fc e(n_prevalence) as txt " term(s)"
     di as txt _col(48) "Final bound    = " as res %9.2f e(bound)
     di as txt "Mean semantic coherence  = " as res %9.2f e(coherence) ///
         _col(48) "Mean exclusivity = " as res %9.2f e(exclusivity)
@@ -86,9 +107,9 @@ program stmata, eclass
         matrix `B'  = e(effects)
         matrix `SE' = e(effects_se)
         local ci = 0
-        foreach cov of local prevalence {
+        foreach nm of local collabels {
             local ++ci
-            di as txt "Covariate " as res "`cov'" as txt ":"
+            di as txt "Term " as res "`nm'" as txt ":"
             di as txt "    topic {c |}       coef         se"
             di as txt "    {hline 6}{c +}{hline 24}"
             forvalues t = 1/`k' {
