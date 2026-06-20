@@ -1,0 +1,45 @@
+name: build
+
+# Builds fastm.plugin on Linux, macOS, and Windows so we ship a binary for each
+# OS without owning each machine. Artifacts are downloadable from the run.
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x86_64
+          - os: macos-latest
+            name: macos-x86_64
+          - os: windows-latest
+            name: windows-x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        run: bash build/build.sh
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: pwsh build/build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fastm-plugin-${{ matrix.name }}
+          path: fastm.plugin
+          if-no-files-found: error

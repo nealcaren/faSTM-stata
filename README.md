@@ -85,7 +85,12 @@ Then, from the repo root in Stata:
 ```
 
 `build.sh` targets `x86_64` on both macOS (a `-bundle`) and Linux
-(`-shared`), since Stata 15 is an x86_64 binary even on Apple Silicon.
+(`-shared`), since Stata 15 is an x86_64 binary even on Apple Silicon. On Windows,
+`build/build.ps1` does the same with MSVC (run it from a Developer PowerShell for
+VS). The `build` GitHub Actions workflow compiles the plugin on Linux, macOS, and
+Windows on every push and uploads each `fastm.plugin` as an artifact, so a Windows
+binary is produced without a Windows machine. It still needs a smoke test on a
+Windows copy of Stata before release.
 
 ## How it fits together
 
