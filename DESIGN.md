@@ -1,8 +1,8 @@
-# stmata — design
+# fastm — design
 
 Structural Topic Models in Stata, with **no end-user Python and no end-user Rust
 toolchain**. The user installs a Stata package (ado/Mata + a precompiled
-`stmata.plugin` binary) and nothing else.
+`fastm.plugin` binary) and nothing else.
 
 This is the Stata sibling of [faSTM](https://github.com/nealcaren/faSTM) (R) and
 shares the same engine, `topica-core`.
@@ -20,7 +20,7 @@ shares the same engine, `topica-core`.
 ```
   Stata (ado + Mata)                 <- syntax, options, orchestration, output
         |  plugin call  (the ONLY C/FFI boundary)
-  stmata.plugin   = shim.c + vendor/stplugin.c + Rust   <- marshals Stata <-> Rust
+  fastm.plugin   = shim.c + vendor/stplugin.c + Rust   <- marshals Stata <-> Rust
         |  plain Rust calls (no FFI)
   topica-core (Rust)                 <- the fit + (eventually) the post-fit layer
 ```
@@ -32,7 +32,7 @@ engine.
 ## Strategy: push everything we can into topica-core
 
 Per the user's plan: **(a)** do as much as possible in Rust inside `topica-core`,
-so faSTM (R), topica (Python), and stmata (Stata) all benefit; **(b)** write the
+so faSTM (R), topica (Python), and fastm (Stata) all benefit; **(b)** write the
 rest in Mata/ado, keeping speed-sensitive inner loops on the Rust side.
 
 What lives where today (from a scan of the repos):
@@ -74,7 +74,7 @@ function pointers (see `vendor/stplugin.h`). They are not linkable symbols.
 - **Define `SYSTEM`.** Compile the C with `-DSYSTEM=3` (APPLEMAC) or `-DSYSTEM=2`
   (OPUNIX/Linux); otherwise `stplugin.h` defaults to Windows and `STDLL` uses
   `__declspec`.
-- **Panics.** `stmata_entry` wraps its body in `catch_unwind` and returns a Stata
+- **Panics.** `fastm_entry` wraps its body in `catch_unwind` and returns a Stata
   return code; panics never cross into Stata. (So keep `panic = "unwind"`.)
 - **macOS:** plugin is a `-bundle`; **Linux:** `-shared -fPIC`.
 
@@ -89,22 +89,22 @@ Two future payoffs, neither blocking:
 
 ## Validation
 
-Mirror faSTM's approach: fit the same corpus (poliblog) through stmata and through
+Mirror faSTM's approach: fit the same corpus (poliblog) through fastm and through
 R `stm`/faSTM and assert the numbers match (labels identical, coherence/
 exclusivity to floating point). The engine is already cross-validated against R
-`stm`, so stmata inherits correctness and we just check the marshaling.
+`stm`, so fastm inherits correctness and we just check the marshaling.
 
 ## Milestones
 
-- **M0 — toolchain/FFI smoke test. DONE, validated in Stata 15.1.** `stmata.plugin`
+- **M0 — toolchain/FFI smoke test. DONE, validated in Stata 15.1.** `fastm.plugin`
   loads; reads a variable, writes `2*x` into a second, saves a scalar that matches
   `summarize` to the digit. Proves the build + shim + arch end to end. (Gotcha
   banked: `SF_vdata`/`SF_vstore` are `(variable, observation)`, both 1-based.)
-- **M1 — fit round-trip. DONE, validated in Stata 15.1.** `plugin call stmata
+- **M1 — fit round-trip. DONE, validated in Stata 15.1.** `plugin call fastm
   <text> <theta1..thetaK>, fit <K> <seed> <iters>` reads the text variable, builds
   a corpus via `topica_core::from_texts`, fits with `fit_ctm` (spectral init, no
   covariates yet), writes θ back per observation, prints top words per topic, and
-  saves `stmata_K/V/D/bound/iters`. Two-theme demo (`examples/fit_demo.do`) splits
+  saves `fastm_K/V/D/bound/iters`. Two-theme demo (`examples/fit_demo.do`) splits
   sports vs cooking cleanly (θ₁≈0.98 on sports docs).
 - **M2 — post-fit in core + Mata wrappers.** FREX/lift/score, coherence,
   exclusivity ported into `topica-core`; `stm`/`labeltopics`-style ado output.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build stmata.plugin for the current OS, targeting x86_64.
+# Build fastm.plugin for the current OS, targeting x86_64.
 #
 #   Stata 15 is an x86_64 binary, so the plugin MUST be x86_64 even on Apple
 #   Silicon (where Stata 15 runs under Rosetta). On Longleaf, Stata is x86_64
@@ -12,7 +12,7 @@ ROOT="$PWD"
 CRATE="$ROOT/crate"
 VENDOR="$ROOT/vendor"
 OBJ="$ROOT/build"
-OUT="$ROOT/stmata.plugin"
+OUT="$ROOT/fastm.plugin"
 
 UNAME="$(uname -s)"
 case "$UNAME" in
@@ -37,7 +37,7 @@ echo ">> Rust staticlib  (target $RTARGET)"
 ( cd "$CRATE"
   rustup target add "$RTARGET" >/dev/null 2>&1 || true
   cargo build --release --target "$RTARGET" )
-ALIB="$CRATE/target/$RTARGET/release/libstmata.a"
+ALIB="$CRATE/target/$RTARGET/release/libfastm.a"
 [ -f "$ALIB" ] || { echo "missing $ALIB" >&2; exit 1; }
 
 echo ">> StataCorp shim  (SYSTEM=$SYS, SAFEMODE)"

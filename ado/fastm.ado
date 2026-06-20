@@ -1,15 +1,15 @@
-*! stmata 0.5.0  Structural Topic Models in Stata (engine: topica-core, Rust)
-*! stmata textvar [if] [in], k(#) [prevalence(fvvarlist) seed(#) iters(#) generate(name) replace]
-program stmata, eclass
+*! fastm 0.5.0  Structural Topic Models in Stata (engine: topica-core, Rust)
+*! fastm textvar [if] [in], k(#) [prevalence(fvvarlist) seed(#) iters(#) generate(name) replace]
+program fastm, eclass
     version 15.0
 
-    // Replay: bare `stmata` redisplays the last fit.
+    // Replay: bare `fastm` redisplays the last fit.
     if replay() {
-        if "`e(cmd)'" != "stmata" {
+        if "`e(cmd)'" != "fastm" {
             di as error "last estimates not found"
             exit 301
         }
-        stmata_display
+        fastm_display
         exit
     }
 
@@ -60,13 +60,13 @@ program stmata, eclass
     // estimateEffect outputs: e(b) row (1 x k*nprev), e(V) (k*nprev square).
     if `nprev' > 0 {
         local pe = `k' * (`nprev' + 1)
-        matrix stmata_eb = J(1, `pe', .)
-        matrix stmata_eV = J(`pe', `pe', 0)
-        matrix stmata_gamma = J(1 + `nprev', `k' - 1, .)
+        matrix fastm_eb = J(1, `pe', .)
+        matrix fastm_eV = J(`pe', `pe', 0)
+        matrix fastm_gamma = J(1 + `nprev', `k' - 1, .)
     }
 
     // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence (K+2..).
-    plugin call stmataplugin `varlist' `generate'1-`generate'`k' `prevvars' ///
+    plugin call fastmplugin `varlist' `generate'1-`generate'`k' `prevvars' ///
         if `touse', fit `k' `seed' `iters' `nprev'
 
     // Post e(b)/e(V) so test/lincom/ereturn display work. Equation = topic#,
@@ -79,44 +79,44 @@ program stmata, eclass
                 local bn `bn' topic`t':`nm'
             }
         }
-        matrix colnames stmata_eb = `bn'
-        matrix rownames stmata_eV = `bn'
-        matrix colnames stmata_eV = `bn'
-        ereturn post stmata_eb stmata_eV, esample(`touse')
+        matrix colnames fastm_eb = `bn'
+        matrix rownames fastm_eV = `bn'
+        matrix colnames fastm_eV = `bn'
+        ereturn post fastm_eb fastm_eV, esample(`touse')
     }
     else {
         ereturn clear
     }
-    ereturn scalar k            = scalar(stmata_K)
-    ereturn scalar n_terms      = scalar(stmata_V)
-    ereturn scalar N_docs       = scalar(stmata_D)
-    ereturn scalar bound        = scalar(stmata_bound)
-    ereturn scalar iters        = scalar(stmata_iters)
-    ereturn scalar coherence    = scalar(stmata_coh)
-    ereturn scalar exclusivity  = scalar(stmata_excl)
+    ereturn scalar k            = scalar(fastm_K)
+    ereturn scalar n_terms      = scalar(fastm_V)
+    ereturn scalar N_docs       = scalar(fastm_D)
+    ereturn scalar bound        = scalar(fastm_bound)
+    ereturn scalar iters        = scalar(fastm_iters)
+    ereturn scalar coherence    = scalar(fastm_coh)
+    ereturn scalar exclusivity  = scalar(fastm_excl)
     ereturn scalar n_prevalence = `nprev'
     ereturn local prev_terms "`collabels'"
     ereturn local prevalence "`prevalence'"
     ereturn local generate   "`generate'"
     ereturn local textvar    "`varlist'"
-    ereturn local cmd        "stmata"
+    ereturn local cmd        "fastm"
 
     if `nprev' > 0 {
         local gcols ""
         forvalues t = 1/`=`k'-1' {
             local gcols "`gcols' topic`t'"
         }
-        matrix rownames stmata_gamma = _cons `collabels'
-        matrix colnames stmata_gamma = `gcols'
-        ereturn matrix gamma = stmata_gamma
-        ereturn local predict "stmata_predict"
+        matrix rownames fastm_gamma = _cons `collabels'
+        matrix colnames fastm_gamma = `gcols'
+        ereturn matrix gamma = fastm_gamma
+        ereturn local predict "fastm_predict"
     }
 
-    stmata_display
+    fastm_display
 end
 
 // Display the stored results (estimation and replay). Reads e() only.
-program stmata_display
+program fastm_display
     di ""
     di as txt "Structural Topic Model" ///
         _col(48) "Documents      = " as res %9.0fc e(N_docs)
@@ -138,15 +138,15 @@ program stmata_display
     }
 end
 
-// predict after stmata (xtreg-style). One topic per call via topic(#).
+// predict after fastm (xtreg-style). One topic per call via topic(#).
 //   pr (default) : prevalence-fitted topic proportion, softmax([X*gamma, 0])
 //   xb           : prevalence linear predictor for the topic (reference topic = 0)
-program stmata_predict
+program fastm_predict
     version 15.0
     syntax newvarname [if] [in] , [ PR XB STDP Topic(integer 0) EQuation(passthru) ]
 
-    if "`e(cmd)'" != "stmata" {
-        di as error "stmata estimation results not found"
+    if "`e(cmd)'" != "fastm" {
+        di as error "fastm estimation results not found"
         exit 301
     }
     marksample touse, novarlist
@@ -176,7 +176,7 @@ program stmata_predict
         tempname G
         matrix `G' = e(gamma)
         quietly generate double `varlist' = .
-        mata: stmata_pred("`varlist'", "`touse'", "`prevvars'", "`G'", `topic', `kk', "proportions")
+        mata: fastm_pred("`varlist'", "`touse'", "`prevvars'", "`G'", `topic', `kk', "proportions")
         exit
     }
 
@@ -190,7 +190,7 @@ program stmata_predict
 end
 
 mata:
-void stmata_pred(string scalar newvar, string scalar touse, string scalar prevvars,
+void fastm_pred(string scalar newvar, string scalar touse, string scalar prevvars,
                  string scalar Gname, real scalar topic, real scalar K, string scalar stat)
 {
     real matrix G, Xcov, X, XB, full, Pr, yv, e
@@ -220,10 +220,10 @@ end
 // One-time plugin load. BARE top-level code (not inside a program): a plugin
 // loaded inside a running program does not register for `plugin call` elsewhere.
 // --------------------------------------------------------------------------
-capture findfile stmata.plugin
+capture findfile fastm.plugin
 if _rc {
-    di as error "stmata: stmata.plugin not found on the adopath (or current dir)"
+    di as error "fastm: fastm.plugin not found on the adopath (or current dir)"
 }
 else {
-    capture program stmataplugin, plugin using(`"`r(fn)'"')
+    capture program fastmplugin, plugin using(`"`r(fn)'"')
 }

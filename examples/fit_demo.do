@@ -1,9 +1,9 @@
 * M1 demo: fit a 2-topic STM on a tiny two-theme corpus and write theta back.
-* Build first:  bash build/build.sh   (-> ./stmata.plugin)
+* Build first:  bash build/build.sh   (-> ./fastm.plugin)
 * Run from repo root:  do examples/fit_demo.do
 
-capture program drop stmata
-program stmata, plugin using("stmata.plugin")
+capture program drop fastm
+program fastm, plugin using("fastm.plugin")
 
 clear
 input str244 text
@@ -26,8 +26,8 @@ forvalues t = 1/`K' {
     gen double theta`t' = .
 }
 
-plugin call stmata text theta1 theta2, fit `K' 42 200
+plugin call fastm text theta1 theta2, fit `K' 42 200
 
 list text theta1 theta2 in 1/12, noobs
-di as result "K=" stmata_K "  V=" stmata_V "  D=" stmata_D ///
-    "  bound=" %9.2f stmata_bound "  iters=" stmata_iters
+di as result "K=" fastm_K "  V=" fastm_V "  D=" fastm_D ///
+    "  bound=" %9.2f fastm_bound "  iters=" fastm_iters

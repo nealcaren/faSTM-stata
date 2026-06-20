@@ -5,7 +5,7 @@
  *
  * Build (see build/build.sh): compiled together with the unmodified StataCorp
  * files in vendor/ (stplugin.c defines _stata_ and pginit) and the Rust
- * staticlib, then linked into `stmata.plugin`.
+ * staticlib, then linked into `fastm.plugin`.
  *
  * IMPORTANT: compile with -DSYSTEM=2 (OPUNIX/Linux) or -DSYSTEM=3 (APPLEMAC).
  * If SYSTEM is left undefined, stplugin.h defaults to STWIN32 and STDLL picks
@@ -14,12 +14,12 @@
 #include "stplugin.h"
 
 /* Rust entry point, defined in crate/src/lib.rs. */
-extern ST_retcode stmata_entry(int argc, char *argv[]);
+extern ST_retcode fastm_entry(int argc, char *argv[]);
 
-/* Stata calls this for `plugin call stmata ...`. */
+/* Stata calls this for `plugin call fastm ...`. */
 STDLL stata_call(int argc, char *argv[])
 {
-    return stmata_entry(argc, argv);
+    return fastm_entry(argc, argv);
 }
 
 /* --- SF_* macros -> linkable symbols for Rust ------------------------------ */

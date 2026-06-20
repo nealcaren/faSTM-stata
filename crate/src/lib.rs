@@ -1,9 +1,9 @@
-//! stmata — the Stata-facing plugin. The Stata ABI lives in `shim.c`; this file
+//! fastm — the Stata-facing plugin. The Stata ABI lives in `shim.c`; this file
 //! is plain Rust and calls `topica_core` (a normal dependency, no FFI).
 //!
 //! Operations are dispatched on the first plugin argument:
-//!   `plugin call stmata <text> <theta1..thetaK>, fit <K> <seed> <em_iters>`
-//!   `plugin call stmata <var> [<out>]`            (no/other args -> M0 hello)
+//!   `plugin call fastm <text> <theta1..thetaK>, fit <K> <seed> <em_iters>`
+//!   `plugin call fastm <var> [<out>]`            (no/other args -> M0 hello)
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_int};
@@ -95,7 +95,7 @@ fn args(argc: c_int, argv: *const *const c_char) -> Vec<String> {
 
 /// Entry called by shim.c's `stata_call`. Panics caught at the boundary.
 #[no_mangle]
-pub extern "C" fn stmata_entry(argc: c_int, argv: *const *const c_char) -> c_int {
+pub extern "C" fn fastm_entry(argc: c_int, argv: *const *const c_char) -> c_int {
     match catch_unwind(AssertUnwindSafe(|| {
         let a = args(argc, argv);
         match a.first().map(String::as_str) {
@@ -105,7 +105,7 @@ pub extern "C" fn stmata_entry(argc: c_int, argv: *const *const c_char) -> c_int
     })) {
         Ok(rc) => rc,
         Err(_) => {
-            err("stmata: internal error (Rust panic)\n");
+            err("fastm: internal error (Rust panic)\n");
             198
         }
     }
@@ -120,14 +120,14 @@ fn fit_op(a: &[String]) -> c_int {
     let em_iters: usize = a.get(3).and_then(|s| s.parse().ok()).unwrap_or(100);
     let nprev: usize = a.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
     if k < 2 {
-        err("stmata: k must be >= 2 (usage: fit <K> [seed] [em_iters] [nprev])\n");
+        err("fastm: k must be >= 2 (usage: fit <K> [seed] [em_iters] [nprev])\n");
         return 198;
     }
 
     let nvars = unsafe { rs_nvars() } as usize;
     if nvars < k + 1 + nprev {
         err(&format!(
-            "stmata: varlist needs 1 text + {} theta + {} prevalence vars (got {})\n",
+            "fastm: varlist needs 1 text + {} theta + {} prevalence vars (got {})\n",
             k, nprev, nvars
         ));
         return 198;
@@ -152,18 +152,18 @@ fn fit_op(a: &[String]) -> c_int {
     let corpus = match from_texts(&texts, Some(&names), None, &opts) {
         Ok(c) => c,
         Err(e) => {
-            err(&format!("stmata: tokenize error: {}\n", e));
+            err(&format!("fastm: tokenize error: {}\n", e));
             return 198;
         }
     };
     let d = corpus.num_docs();
     let v = corpus.num_types();
     if d < 2 || v < 2 {
-        err("stmata: too few documents/terms after tokenization\n");
+        err("fastm: too few documents/terms after tokenization\n");
         return 198;
     }
     say(&format!(
-        "stmata: corpus = {} docs, {} terms, {} tokens; fitting K={} ...\n",
+        "fastm: corpus = {} docs, {} terms, {} tokens; fitting K={} ...\n",
         d,
         v,
         corpus.total_tokens(),
@@ -186,7 +186,7 @@ fn fit_op(a: &[String]) -> c_int {
             x.push(row);
         }
         say(&format!(
-            "stmata: prevalence design = intercept + {} covariate(s)\n",
+            "fastm: prevalence design = intercept + {} covariate(s)\n",
             nprev
         ));
         Some(x)
@@ -238,15 +238,15 @@ fn fit_op(a: &[String]) -> c_int {
     let mean_coh = coh.iter().sum::<f64>() / k as f64;
     let mean_excl = excl.iter().sum::<f64>() / k as f64;
 
-    save_scalar("stmata_K", k as f64);
-    save_scalar("stmata_V", v as f64);
-    save_scalar("stmata_D", d as f64);
-    save_scalar("stmata_bound", model.bound);
-    save_scalar("stmata_iters", model.em_iters_run as f64);
-    save_scalar("stmata_coh", mean_coh);
-    save_scalar("stmata_excl", mean_excl);
+    save_scalar("fastm_K", k as f64);
+    save_scalar("fastm_V", v as f64);
+    save_scalar("fastm_D", d as f64);
+    save_scalar("fastm_bound", model.bound);
+    save_scalar("fastm_iters", model.em_iters_run as f64);
+    save_scalar("fastm_coh", mean_coh);
+    save_scalar("fastm_excl", mean_excl);
 
-    say("stmata: top FREX words per topic [coherence / exclusivity] --\n");
+    say("fastm: top FREX words per topic [coherence / exclusivity] --\n");
     for t in 0..k {
         let words: Vec<&str> = labels[t]
             .iter()
@@ -261,7 +261,7 @@ fn fit_op(a: &[String]) -> c_int {
         ));
     }
     // estimateEffect: covariate effects on each topic's proportions, by the
-    // method of composition (fills the Stata matrices stmata_b / stmata_se,
+    // method of composition (fills the Stata matrices fastm_b / fastm_se,
     // which the ado pre-creates as k x nprev).
     if want_effects {
         if let Some(xref) = prevalence.as_deref() {
@@ -277,10 +277,10 @@ fn fit_op(a: &[String]) -> c_int {
                 );
                 for ci in 0..pdim {
                     let r = t * pdim + ci + 1; // 1-based
-                    mat_store("stmata_eb", 1, r, coef[ci]);
+                    mat_store("fastm_eb", 1, r, coef[ci]);
                     for cj in 0..pdim {
                         let c = t * pdim + cj + 1;
-                        mat_store("stmata_eV", r, c, vcov[ci * pdim + cj]);
+                        mat_store("fastm_eV", r, c, vcov[ci * pdim + cj]);
                     }
                 }
             }
@@ -288,19 +288,19 @@ fn fit_op(a: &[String]) -> c_int {
             if let Some(g) = &model.gamma {
                 for (pi, row) in g.iter().enumerate() {
                     for (ti, &val) in row.iter().enumerate() {
-                        mat_store("stmata_gamma", pi + 1, ti + 1, val);
+                        mat_store("fastm_gamma", pi + 1, ti + 1, val);
                     }
                 }
             }
             say(&format!(
-                "stmata: estimateEffect done ({} term(s), {} draws, method of composition)\n",
+                "fastm: estimateEffect done ({} term(s), {} draws, method of composition)\n",
                 nprev, nsims
             ));
         }
     }
 
     say(&format!(
-        "stmata: done. bound={:.2}, iters={}, mean coherence={:.2}, mean exclusivity={:.2}\n",
+        "fastm: done. bound={:.2}, iters={}, mean coherence={:.2}, mean exclusivity={:.2}\n",
         model.bound, model.em_iters_run, mean_coh, mean_excl
     ));
     0
@@ -311,11 +311,11 @@ fn hello_op() -> c_int {
     let nobs = unsafe { rs_nobs() };
     let nvars = unsafe { rs_nvars() };
     say(&format!(
-        "stmata: hello from Rust. obs={}, vars in varlist={}\n",
+        "fastm: hello from Rust. obs={}, vars in varlist={}\n",
         nobs, nvars
     ));
     if nvars < 1 {
-        err("stmata: pass at least one variable (the input)\n");
+        err("fastm: pass at least one variable (the input)\n");
         return 198;
     }
 
@@ -341,9 +341,9 @@ fn hello_op() -> c_int {
         }
     }
     let mean = if n > 0 { sum / n as f64 } else { 0.0 };
-    save_scalar("stmata_mean", mean);
+    save_scalar("fastm_mean", mean);
     say(&format!(
-        "stmata: read {} non-missing obs, mean={:.6}, saved scalar stmata_mean\n",
+        "fastm: read {} non-missing obs, mean={:.6}, saved scalar fastm_mean\n",
         n, mean
     ));
     0

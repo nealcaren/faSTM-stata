@@ -1,9 +1,9 @@
-# stmata
+# fastm
 
 Structural Topic Models in **Stata**, backed by the same Rust engine
 (`topica-core`) as [faSTM](https://github.com/nealcaren/faSTM) (R). No Python and
 no Rust toolchain required to *use* it: you install an ado/Mata package plus a
-precompiled `stmata.plugin`.
+precompiled `fastm.plugin`.
 
 > Status: **M1 done** — fits an STM end to end in Stata 15.1: reads a text
 > variable, fits via `topica-core`, writes topic proportions (θ) back, prints top
@@ -14,7 +14,7 @@ precompiled `stmata.plugin`.
 ```
 crate/        Rust plugin (lib.rs) + the C shim (shim.c) over StataCorp's interface
 vendor/       StataCorp's stplugin.c / stplugin.h, unmodified (see vendor/NOTICE.md)
-build/        build.sh — compiles + links stmata.plugin for x86_64 (macOS / Linux)
+build/        build.sh — compiles + links fastm.plugin for x86_64 (macOS / Linux)
 ado/  mata/   Stata side (added from M2)
 examples/     hello.do — the M0 smoke test
 tests/parity/ parity checks vs R stm / faSTM (added from M1)
@@ -24,7 +24,7 @@ docs/         design + notes
 ## Build + smoke test
 
 ```sh
-bash build/build.sh          # -> ./stmata.plugin  (x86_64)
+bash build/build.sh          # -> ./fastm.plugin  (x86_64)
 # then, in Stata 15, from the repo root:
 #   do examples/hello.do
 ```

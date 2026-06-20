@@ -2,7 +2,7 @@
 * Build first:  bash build/build.sh ;  run from repo root.
 
 clear all
-run "ado/stmata.ado"
+run "ado/fastm.ado"
 
 input str244 text
 "the team won the game with a great goal by the star player"
@@ -21,7 +21,7 @@ end
 
 gen byte sporty = (_n <= 6)     // 1 = sports docs, 0 = cooking docs
 
-stmata text, k(2) prevalence(sporty) seed(42) iters(200)
+fastm text, k(2) prevalence(sporty) seed(42) iters(200)
 
 list text theta1 theta2 sporty in 1/12, noobs
 ereturn list

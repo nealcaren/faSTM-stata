@@ -1,8 +1,8 @@
-* Postestimation demo: test / lincom / margins after stmata.
+* Postestimation demo: test / lincom / margins after fastm.
 * Run from repo root after build/build.sh.
 
 clear all
-run "ado/stmata.ado"
+run "ado/fastm.ado"
 
 input str244 text
 "the team won the game with a great goal by the star player"
@@ -21,7 +21,7 @@ end
 
 gen byte sporty = (_n <= 6)
 
-stmata text, k(2) prevalence(i.sporty) seed(42) iters(200)
+fastm text, k(2) prevalence(i.sporty) seed(42) iters(200)
 
 * Wald test and cross-topic linear combination on the posted e(b)/e(V):
 test [topic1]1.sporty

@@ -1,9 +1,9 @@
-* M2 demo: the `stmata` command on the two-theme corpus.
+* M2 demo: the `fastm` command on the two-theme corpus.
 * Build first:  bash build/build.sh
 * Run from repo root:  do examples/cmd_demo.do
 
 clear all
-run "ado/stmata.ado"      // define the command (and load the plugin on first use)
+run "ado/fastm.ado"      // define the command (and load the plugin on first use)
 
 input str244 text
 "the team won the game with a great goal by the star player"
@@ -20,7 +20,7 @@ input str244 text
 "the recipe needs fresh dough fresh flour and a hot oven to bake"
 end
 
-stmata text, k(2) seed(42) iters(200)
+fastm text, k(2) seed(42) iters(200)
 
 list text theta1 theta2 in 1/4, noobs
 ereturn list

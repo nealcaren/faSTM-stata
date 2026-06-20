@@ -2,7 +2,7 @@
 * Run from repo root after build/build.sh.
 
 clear all
-run "ado/stmata.ado"
+run "ado/fastm.ado"
 
 input str244 text
 "the team won the game with a great goal by the star player"
@@ -23,6 +23,6 @@ gen byte sporty = (_n <= 6)
 gen double idx  = _n
 
 * Factor + continuous, Stata-idiomatic:
-stmata text, k(2) prevalence(i.sporty c.idx) seed(42) iters(200)
+fastm text, k(2) prevalence(i.sporty c.idx) seed(42) iters(200)
 
 ereturn list

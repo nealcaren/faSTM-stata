@@ -1,22 +1,22 @@
 {smcl}
-{* *! version 0.4.0  stmata}{...}
+{* *! version 0.4.0  fastm}{...}
 {vieweralsosee "" "--"}{...}
-{viewerjumpto "Syntax" "stmata##syntax"}{...}
-{viewerjumpto "Description" "stmata##description"}{...}
-{viewerjumpto "Options" "stmata##options"}{...}
-{viewerjumpto "Examples" "stmata##examples"}{...}
-{viewerjumpto "Stored results" "stmata##results"}{...}
+{viewerjumpto "Syntax" "fastm##syntax"}{...}
+{viewerjumpto "Description" "fastm##description"}{...}
+{viewerjumpto "Options" "fastm##options"}{...}
+{viewerjumpto "Examples" "fastm##examples"}{...}
+{viewerjumpto "Stored results" "fastm##results"}{...}
 {title:Title}
 
 {phang}
-{cmd:stmata} {hline 2} Structural Topic Models (engine: topica-core, Rust)
+{cmd:fastm} {hline 2} Structural Topic Models (engine: topica-core, Rust)
 
 
 {marker syntax}{...}
 {title:Syntax}
 
 {p 8 15 2}
-{cmd:stmata} {varname} {ifin}{cmd:,} {opt k(#)} [{it:options}]
+{cmd:fastm} {varname} {ifin}{cmd:,} {opt k(#)} [{it:options}]
 
 {pstd}
 where {varname} is a string variable holding one document per observation.
@@ -43,7 +43,7 @@ default {cmd:seed(42)}{p_end}
 {title:Description}
 
 {pstd}
-{cmd:stmata} fits a Structural Topic Model to a corpus held in a Stata string
+{cmd:fastm} fits a Structural Topic Model to a corpus held in a Stata string
 variable, one document per observation. Fitting (logistic-normal variational EM
 with spectral initialization), tokenization, FREX/coherence/exclusivity, and
 covariate-effect estimation all run in {cmd:topica-core}, a self-contained Rust
@@ -58,7 +58,7 @@ method of composition, with standard errors that propagate the per-document
 topic-estimation uncertainty.
 
 {pstd}
-Typing {cmd:stmata} without arguments redisplays the last fit.
+Typing {cmd:fastm} without arguments redisplays the last fit.
 
 
 {marker options}{...}
@@ -85,22 +85,22 @@ variables (default {cmd:theta}).
 {title:Examples}
 
 {pstd}Fit 20 topics on a text variable:{p_end}
-{phang2}{cmd:. stmata abstract, k(20)}{p_end}
+{phang2}{cmd:. fastm abstract, k(20)}{p_end}
 
 {pstd}With prevalence covariates and an interaction:{p_end}
-{phang2}{cmd:. stmata abstract, k(20) prevalence(i.party c.year i.party##c.year)}{p_end}
+{phang2}{cmd:. fastm abstract, k(20) prevalence(i.party c.year i.party##c.year)}{p_end}
 
 {pstd}On a subsample, with a custom variable stub:{p_end}
-{phang2}{cmd:. stmata speech if chamber==1, k(15) generate(tp)}{p_end}
+{phang2}{cmd:. fastm speech if chamber==1, k(15) generate(tp)}{p_end}
 
 {pstd}Redisplay the last fit:{p_end}
-{phang2}{cmd:. stmata}{p_end}
+{phang2}{cmd:. fastm}{p_end}
 
 
 {marker results}{...}
 {title:Stored results}
 
-{pstd}{cmd:stmata} stores the following in {cmd:e()}:
+{pstd}{cmd:fastm} stores the following in {cmd:e()}:
 
 {synoptset 22 tabbed}{...}
 {p2col 5 22 26 2: Scalars}{p_end}
@@ -114,7 +114,7 @@ variables (default {cmd:theta}).
 {synopt:{cmd:e(n_prevalence)}}number of prevalence terms{p_end}
 
 {p2col 5 22 26 2: Macros}{p_end}
-{synopt:{cmd:e(cmd)}}{cmd:stmata}{p_end}
+{synopt:{cmd:e(cmd)}}{cmd:fastm}{p_end}
 {synopt:{cmd:e(textvar)}}name of the text variable{p_end}
 {synopt:{cmd:e(prevalence)}}prevalence specification{p_end}
 {synopt:{cmd:e(prev_terms)}}expanded prevalence term names{p_end}
@@ -129,14 +129,14 @@ variables (default {cmd:theta}).
 {marker postestimation}{...}
 {title:Postestimation}
 
-{pstd}{cmd:stmata} posts {cmd:e(b)}/{cmd:e(V)} (the method-of-composition effects,
+{pstd}{cmd:fastm} posts {cmd:e(b)}/{cmd:e(V)} (the method-of-composition effects,
 one equation per topic), so the usual tools apply:{p_end}
 {phang2}{cmd:. test [topic1]1.party}{p_end}
 {phang2}{cmd:. lincom [topic1]year - [topic2]year}{p_end}
 {phang2}{cmd:. margins party, predict(equation(topic1))}{p_end}
 {phang2}{cmd:. marginsplot}{p_end}
 
-{pstd}{cmd:predict} after {cmd:stmata} (one topic per call):{p_end}
+{pstd}{cmd:predict} after {cmd:fastm} (one topic per call):{p_end}
 {synoptset 30 tabbed}{...}
 {synopt:{cmd:predict} {it:nv}{cmd:, xb topic(}{it:#}{cmd:)}}estimateEffect linear prediction{p_end}
 {synopt:{cmd:predict} {it:nv}{cmd:, stdp topic(}{it:#}{cmd:)}}its standard error{p_end}
