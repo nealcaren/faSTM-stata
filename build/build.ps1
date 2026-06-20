@@ -6,6 +6,7 @@
 #
 # Usage:  pwsh build/build.ps1
 $ErrorActionPreference = "Stop"
+$env:CARGO_TERM_COLOR = "never"   # keep ANSI codes out of --print native-static-libs
 $Root   = Split-Path -Parent $PSScriptRoot
 $Crate  = Join-Path $Root "crate"
 $Vendor = Join-Path $Root "vendor"
@@ -26,17 +27,23 @@ if (!(Test-Path $Alib)) { throw "missing $Alib" }
 
 $syslibs = ""
 foreach ($line in $nat) {
-    if ($line -match "native-static-libs:\s*(.*)$") { $syslibs = $Matches[1].Trim() }
+    if ($line -match "native-static-libs:\s*(.*)$") {
+        # strip any stray ANSI escapes, then split into lib names
+        $syslibs = ($Matches[1] -replace "\x1b\[[0-9;]*m", "").Trim()
+    }
 }
 
 Write-Host ">> StataCorp shim  (SYSTEM=STWIN32=4)"
 cl /nologo /c /DSYSTEM=4 /I"$Vendor" "$Vendor\stplugin.c" /Fo"$Obj\stplugin.obj"
+if ($LASTEXITCODE -ne 0) { throw "cl failed on stplugin.c ($LASTEXITCODE)" }
 cl /nologo /c /DSYSTEM=4 /I"$Vendor" "$Crate\src\shim.c"   /Fo"$Obj\shim.obj"
+if ($LASTEXITCODE -ne 0) { throw "cl failed on shim.c ($LASTEXITCODE)" }
 
 Write-Host ">> link $Out"
 $linkArgs = @("/nologo", "/DLL", "/OUT:$Out", "$Obj\shim.obj", "$Obj\stplugin.obj", "$Alib")
-if ($syslibs) { $linkArgs += $syslibs.Split(" ") }
+if ($syslibs) { $linkArgs += ($syslibs.Split(" ") | Where-Object { $_ -ne "" }) }
 & link @linkArgs
+if ($LASTEXITCODE -ne 0) { throw "link failed ($LASTEXITCODE)" }
 
 Write-Host "built: $Out"
 # Stata loads the DLL by the name fastm.plugin; confirm the entry points export.

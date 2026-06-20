@@ -26,8 +26,8 @@ case "$UNAME" in
   Linux)
     SYS=2                                  # OPUNIX
     RTARGET="${RTARGET:-x86_64-unknown-linux-gnu}"
-    CCARCH=""
-    LINK="-shared -fPIC"
+    CCARCH="-fPIC"                         # objects must be PIC for a shared object
+    LINK="-shared"
     SYSLIBS="-lm -ldl -lpthread"
     ;;
   *) echo "unsupported OS: $UNAME" >&2; exit 1 ;;
