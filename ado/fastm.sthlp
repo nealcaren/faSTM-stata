@@ -32,6 +32,15 @@ where {varname} is a string variable holding one document per observation.
 {synopt:{opt seed(#)}}random seed (used for random init and the effect draws);
 default {cmd:seed(42)}{p_end}
 
+{syntab:Text preprocessing}
+{synopt:{opt stop:words(spec)}}{cmd:none} (default), {cmd:english}, or a
+filename (one stopword per line){p_end}
+{synopt:{opt min:docfreq(#)}}drop terms appearing in fewer than # documents;
+default {cmd:mindocfreq(1)}{p_end}
+{synopt:{opt max:docpct(#)}}drop terms appearing in more than #% of documents;
+default {cmd:maxdocpct(100)}{p_end}
+{synopt:{opt nolow:ercase}}keep token case (default lowercases){p_end}
+
 {syntab:Output}
 {synopt:{opt gen:erate(name)}}stub for the topic-proportion variables; default
 {cmd:generate(theta)}{p_end}
@@ -74,6 +83,18 @@ design is expanded with base/omitted levels dropped, and an intercept is added.
 on convergence.
 
 {phang}{opt seed(#)} sets the random seed (default 42).
+
+{phang}{opt stopwords(spec)} controls stopword removal: {cmd:none} (default),
+{cmd:english} (a bundled Snowball English list), or a filename with one stopword
+per line.
+
+{phang}{opt mindocfreq(#)} drops terms appearing in fewer than # documents
+(default 1, i.e. keep all). {opt maxdocpct(#)} drops terms appearing in more than
+#% of documents (default 100). Together these are the vocabulary trimming that R
+{cmd:stm}'s {cmd:prepDocuments} performs.
+
+{phang}{opt nolowercase} keeps tokens in their original case; by default tokens
+are lowercased before counting.
 
 {phang}{opt generate(name)} sets the stub for the created topic-proportion
 variables (default {cmd:theta}).

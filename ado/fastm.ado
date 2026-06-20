@@ -14,14 +14,42 @@ program fastm, eclass
     }
 
     syntax varname [if] [in], K(integer) ///
-        [ PREValence(varlist fv ts) SEED(integer 42) ITERs(integer 200) ///
-          GENerate(name) replace ]
+        [ PREValence(varlist fv ts) ///
+          noLOWercase STOPwords(string) MINdocfreq(integer 1) MAXdocpct(real 100) STEM ///
+          SEED(integer 42) ITERs(integer 200) GENerate(name) replace ]
 
     if `k' < 2 {
         di as error "k() must be >= 2"
         exit 198
     }
     if "`generate'" == "" local generate theta
+    if "`stem'" != "" {
+        di as error "stem is not yet supported (the engine has no stemmer); stem upstream for now"
+        exit 198
+    }
+    local lower = ("`lowercase'" != "nolowercase")   // default on; nolowercase turns off
+
+    // Resolve stopwords() to a file path the plugin loads (via the global below).
+    local stopfile ""
+    if "`stopwords'" != "" & "`stopwords'" != "none" {
+        if "`stopwords'" == "english" {
+            capture findfile fastm_english.stops
+            if _rc {
+                di as error "english stopword list (fastm_english.stops) not found on the adopath"
+                exit 198
+            }
+            local stopfile "`r(fn)'"
+        }
+        else {
+            capture confirm file `"`stopwords'"'
+            if _rc {
+                di as error `"stopwords(): use none, english, or an existing filename"'
+                exit 198
+            }
+            local stopfile `"`stopwords'"'
+        }
+    }
+    global fastm_stopfile `"`stopfile'"'
 
     marksample touse, strok
 
@@ -67,7 +95,7 @@ program fastm, eclass
 
     // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence (K+2..).
     plugin call fastmplugin `varlist' `generate'1-`generate'`k' `prevvars' ///
-        if `touse', fit `k' `seed' `iters' `nprev'
+        if `touse', fit `k' `seed' `iters' `nprev' `mindocfreq' `maxdocpct' `lower'
 
     // Post e(b)/e(V) so test/lincom/ereturn display work. Equation = topic#,
     // coefficient = prevalence term (matches the plugin's fill order: topic, term).

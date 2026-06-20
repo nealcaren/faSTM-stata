@@ -11,7 +11,8 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use topica_core::corpus::{from_texts, LoadOptions};
+use std::path::Path;
+use topica_core::corpus::{from_texts, load_stoplist, LoadOptions};
 use topica_core::ctm::{fit_ctm, GammaPrior};
 use topica_core::{effects, inspect};
 
@@ -29,6 +30,7 @@ extern "C" {
     fn rs_ifobs(obs: c_int) -> c_int;
     fn rs_scal_save(name: *const c_char, v: c_double) -> c_int;
     fn rs_mat_store(name: *const c_char, r: c_int, c: c_int, v: c_double) -> c_int;
+    fn rs_macro_use(name: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
     fn rs_sdatalen(var: c_int, obs: c_int) -> c_int;
     fn rs_var_is_strl(var: c_int) -> c_int;
     fn rs_sdata(var: c_int, obs: c_int, buf: *mut c_char) -> c_int;
@@ -54,6 +56,18 @@ fn mat_store(name: &str, r: usize, c: usize, v: f64) {
     if let Ok(cn) = CString::new(name) {
         unsafe { rs_mat_store(cn.as_ptr(), r as c_int, c as c_int, v) };
     }
+}
+/// Read a Stata global macro by name (empty if unset).
+fn macro_use(name: &str) -> String {
+    let cn = match CString::new(name) {
+        Ok(c) => c,
+        Err(_) => return String::new(),
+    };
+    let cap = 4096usize;
+    let mut buf = vec![0u8; cap];
+    unsafe { rs_macro_use(cn.as_ptr(), buf.as_mut_ptr() as *mut c_char, cap as c_int) };
+    let end = buf.iter().position(|&b| b == 0).unwrap_or(0);
+    String::from_utf8_lossy(&buf[..end]).into_owned()
 }
 
 /// Read a (var, obs) string value into an owned String (str# or strL).
@@ -124,6 +138,9 @@ fn fit_op(a: &[String]) -> c_int {
     let seed: u64 = a.get(2).and_then(|s| s.parse().ok()).unwrap_or(42);
     let em_iters: usize = a.get(3).and_then(|s| s.parse().ok()).unwrap_or(100);
     let nprev: usize = a.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let mindf: u32 = a.get(5).and_then(|s| s.parse().ok()).unwrap_or(1);
+    let maxdpct: f64 = a.get(6).and_then(|s| s.parse().ok()).unwrap_or(100.0);
+    let lower: bool = a.get(7).and_then(|s| s.parse::<i32>().ok()).unwrap_or(1) != 0;
     if k < 2 {
         err("fastm: k must be >= 2 (usage: fit <K> [seed] [em_iters] [nprev])\n");
         return 198;
@@ -153,7 +170,25 @@ fn fit_op(a: &[String]) -> c_int {
         off += 1;
     }
 
-    let opts = LoadOptions::default();
+    let mut opts = LoadOptions {
+        min_doc_freq: mindf,
+        max_doc_fraction: (maxdpct / 100.0).clamp(0.0, 1.0),
+        lowercase: lower,
+        ..Default::default()
+    };
+    let stopfile = macro_use("fastm_stopfile");
+    if !stopfile.is_empty() {
+        match load_stoplist(Path::new(&stopfile)) {
+            Ok(sw) => opts.stopwords = sw,
+            Err(e) => {
+                err(&format!(
+                    "fastm: cannot read stopwords file '{}': {}\n",
+                    stopfile, e
+                ));
+                return 198;
+            }
+        }
+    }
     let corpus = match from_texts(&texts, Some(&names), None, &opts) {
         Ok(c) => c,
         Err(e) => {
@@ -173,6 +208,13 @@ fn fit_op(a: &[String]) -> c_int {
         v,
         corpus.total_tokens(),
         k
+    ));
+    say(&format!(
+        "fastm: prep = lowercase {}, mindocfreq {}, maxdocpct {:.0}%, stopwords {}\n",
+        if lower { "on" } else { "off" },
+        mindf,
+        maxdpct,
+        if opts.stopwords.is_empty() { "none" } else { "yes" }
     ));
 
     // Prevalence design matrix (intercept + covariates), aligned to corpus docs.
