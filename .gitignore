@@ -17,3 +17,6 @@ tests/parity/*.dta
 
 # internal planning (not part of the public package)
 docs/
+
+# local cargo override for engine dev (not for distribution)
+crate/.cargo/
