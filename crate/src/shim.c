@@ -35,6 +35,7 @@ ST_retcode rs_vstore(ST_int var, ST_int obs, ST_double v) { return SF_vstore(var
 ST_int     rs_is_missing(ST_double v)                 { return SF_is_missing(v); }
 ST_int     rs_ifobs(ST_int obs)                       { return SF_ifobs(obs); }
 ST_retcode rs_scal_save(char *s, ST_double d)         { return SF_scal_save(s, d); }
+ST_retcode rs_mat_store(char *name, ST_int r, ST_int c, ST_double v) { return SF_mat_store(name, r, c, v); }
 
 /* string reads (var, obs), 1-based */
 ST_int     rs_sdatalen(ST_int var, ST_int obs)        { return SF_sdatalen(var, obs); }

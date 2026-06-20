@@ -13,7 +13,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use topica_core::corpus::{from_texts, LoadOptions};
 use topica_core::ctm::{fit_ctm, GammaPrior};
-use topica_core::inspect;
+use topica_core::{effects, inspect};
 
 // Defined in shim.c (thin wrappers over the SF_* macros).
 extern "C" {
@@ -28,6 +28,7 @@ extern "C" {
     fn rs_is_missing(v: c_double) -> c_int;
     fn rs_ifobs(obs: c_int) -> c_int;
     fn rs_scal_save(name: *const c_char, v: c_double) -> c_int;
+    fn rs_mat_store(name: *const c_char, r: c_int, c: c_int, v: c_double) -> c_int;
     fn rs_sdatalen(var: c_int, obs: c_int) -> c_int;
     fn rs_var_is_strl(var: c_int) -> c_int;
     fn rs_sdata(var: c_int, obs: c_int, buf: *mut c_char) -> c_int;
@@ -47,6 +48,11 @@ fn err(s: &str) {
 fn save_scalar(name: &str, v: f64) {
     if let Ok(c) = CString::new(name) {
         unsafe { rs_scal_save(c.as_ptr(), v) };
+    }
+}
+fn mat_store(name: &str, r: usize, c: usize, v: f64) {
+    if let Ok(cn) = CString::new(name) {
+        unsafe { rs_mat_store(cn.as_ptr(), r as c_int, c as c_int, v) };
     }
 }
 
@@ -112,16 +118,17 @@ fn fit_op(a: &[String]) -> c_int {
     let k: usize = a.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
     let seed: u64 = a.get(2).and_then(|s| s.parse().ok()).unwrap_or(42);
     let em_iters: usize = a.get(3).and_then(|s| s.parse().ok()).unwrap_or(100);
+    let nprev: usize = a.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
     if k < 2 {
-        err("stmata: k must be >= 2 (usage: fit <K> [seed] [em_iters])\n");
+        err("stmata: k must be >= 2 (usage: fit <K> [seed] [em_iters] [nprev])\n");
         return 198;
     }
 
     let nvars = unsafe { rs_nvars() } as usize;
-    if nvars < k + 1 {
+    if nvars < k + 1 + nprev {
         err(&format!(
-            "stmata: varlist needs 1 text var + {} theta vars (got {})\n",
-            k, nvars
+            "stmata: varlist needs 1 text + {} theta + {} prevalence vars (got {})\n",
+            k, nprev, nvars
         ));
         return 198;
     }
@@ -163,6 +170,31 @@ fn fit_op(a: &[String]) -> c_int {
         k
     ));
 
+    // Prevalence design matrix (intercept + covariates), aligned to corpus docs.
+    let prevalence: Option<Vec<Vec<f64>>> = if nprev > 0 {
+        let mut x = Vec::with_capacity(d);
+        for name in &corpus.doc_names {
+            let off: usize = name.parse().unwrap_or(usize::MAX);
+            let obs = obs_of_offset.get(off).copied().unwrap_or(i1);
+            let mut row = Vec::with_capacity(1 + nprev);
+            row.push(1.0); // intercept
+            for p in 0..nprev {
+                let mut val: c_double = 0.0;
+                unsafe { rs_vdata((2 + k + p) as c_int, obs, &mut val) };
+                row.push(val);
+            }
+            x.push(row);
+        }
+        say(&format!(
+            "stmata: prevalence design = intercept + {} covariate(s)\n",
+            nprev
+        ));
+        Some(x)
+    } else {
+        None
+    };
+    let want_effects = nprev > 0;
+
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let model = fit_ctm(
         &corpus.docs,
@@ -171,13 +203,13 @@ fn fit_op(a: &[String]) -> c_int {
         em_iters,
         1e-5,
         0.0,
-        None,  // no prevalence (M3)
-        None,  // no content (later)
-        true,  // spectral init (STM default)
+        prevalence.as_deref(), // prevalence covariates (#3a)
+        None,                  // no content (later)
+        true,                  // spectral init (STM default)
         None,
         GammaPrior::Pooled,
-        false, // keep_nu
-        false, // diagonal
+        want_effects, // keep_nu: needed for estimateEffect (#3b)
+        false,        // diagonal
         &mut rng,
     );
     let theta = model.doc_topics(); // d x k
@@ -228,6 +260,28 @@ fn fit_op(a: &[String]) -> c_int {
             words.join(" ")
         ));
     }
+    // estimateEffect: covariate effects on each topic's proportions, by the
+    // method of composition (fills the Stata matrices stmata_b / stmata_se,
+    // which the ado pre-creates as k x nprev).
+    if want_effects {
+        if let Some(xref) = prevalence.as_deref() {
+            let mut eff_rng = ChaCha8Rng::seed_from_u64(seed ^ 0x9E37_79B9_7F4A_7C15);
+            let nsims = 100usize;
+            for t in 0..k {
+                let (coef, se) =
+                    effects::estimate_effect_topic(&model.lambda, &model.nu, xref, t, nsims, &mut eff_rng);
+                for ci in 1..=nprev {
+                    mat_store("stmata_b", t + 1, ci, coef[ci]);
+                    mat_store("stmata_se", t + 1, ci, se[ci]);
+                }
+            }
+            say(&format!(
+                "stmata: estimateEffect done ({} covariate(s), {} draws, method of composition)\n",
+                nprev, nsims
+            ));
+        }
+    }
+
     say(&format!(
         "stmata: done. bound={:.2}, iters={}, mean coherence={:.2}, mean exclusivity={:.2}\n",
         model.bound, model.em_iters_run, mean_coh, mean_excl

@@ -1,44 +1,69 @@
-*! stmata 0.1.0  Structural Topic Models in Stata (engine: topica-core, Rust)
-*! Syntax:  stmata textvar [if] [in], k(#) [seed(#) iters(#) prefix(name) replace]
+*! stmata 0.2.0  Structural Topic Models in Stata (engine: topica-core, Rust)
+*! stmata textvar [if] [in], k(#) [prevalence(varlist) seed(#) iters(#) generate(name) replace]
 program stmata, eclass
     version 15.0
     syntax varname [if] [in], K(integer) ///
-        [ SEED(integer 42) ITERs(integer 200) PREfix(name) replace ]
+        [ PREValence(varlist numeric) SEED(integer 42) ITERs(integer 200) ///
+          GENerate(name) replace ]
 
     if `k' < 2 {
         di as error "k() must be >= 2"
         exit 198
     }
-    if "`prefix'" == "" local prefix theta
+    if "`generate'" == "" local generate theta
+    local nprev : word count `prevalence'
 
-    // Sample: honors if/in and drops empty/missing text (strok = string ok).
+    // Sample: honors if/in, drops empty/missing text and any missing covariate.
     marksample touse, strok
+    if "`prevalence'" != "" markout `touse' `prevalence'
 
     // Create the K topic-proportion variables the plugin writes into.
     forvalues t = 1/`k' {
-        capture confirm new variable `prefix'`t'
+        capture confirm new variable `generate'`t'
         if _rc & "`replace'" == "" {
-            di as error "`prefix'`t' already exists; use replace or a different prefix()"
+            di as error "`generate'`t' already exists; use replace or a different generate()"
             exit 110
         }
-        capture drop `prefix'`t'
-        quietly generate double `prefix'`t' = .
+        capture drop `generate'`t'
+        quietly generate double `generate'`t' = .
     }
 
-    // text var (1) then the K theta vars (2..K+1); plugin honors `touse'.
-    plugin call stmataplugin `varlist' `prefix'1-`prefix'`k' if `touse', fit `k' `seed' `iters'
+    // estimateEffect output matrices the plugin fills (k topics x nprev covariates).
+    if `nprev' > 0 {
+        matrix stmata_b  = J(`k', `nprev', .)
+        matrix stmata_se = J(`k', `nprev', .)
+    }
+
+    // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence (K+2..).
+    plugin call stmataplugin `varlist' `generate'1-`generate'`k' `prevalence' ///
+        if `touse', fit `k' `seed' `iters' `nprev'
 
     ereturn clear
-    ereturn scalar k       = scalar(stmata_K)
-    ereturn scalar n_terms = scalar(stmata_V)
-    ereturn scalar N_docs  = scalar(stmata_D)
-    ereturn scalar bound  = scalar(stmata_bound)
-    ereturn scalar iters  = scalar(stmata_iters)
-    ereturn scalar coherence   = scalar(stmata_coh)
-    ereturn scalar exclusivity = scalar(stmata_excl)
-    ereturn local prefix  "`prefix'"
-    ereturn local textvar "`varlist'"
-    ereturn local cmd     "stmata"
+    ereturn scalar k            = scalar(stmata_K)
+    ereturn scalar n_terms      = scalar(stmata_V)
+    ereturn scalar N_docs       = scalar(stmata_D)
+    ereturn scalar bound        = scalar(stmata_bound)
+    ereturn scalar iters        = scalar(stmata_iters)
+    ereturn scalar coherence    = scalar(stmata_coh)
+    ereturn scalar exclusivity  = scalar(stmata_excl)
+    ereturn scalar n_prevalence = `nprev'
+    ereturn local prevalence "`prevalence'"
+    ereturn local generate   "`generate'"
+    ereturn local textvar    "`varlist'"
+    ereturn local cmd        "stmata"
+
+    if `nprev' > 0 {
+        local rn ""
+        forvalues t = 1/`k' {
+            local rn "`rn' topic`t'"
+        }
+        matrix rownames stmata_b  = `rn'
+        matrix colnames stmata_b  = `prevalence'
+        matrix rownames stmata_se = `rn'
+        matrix colnames stmata_se = `prevalence'
+        ereturn matrix effects_se = stmata_se
+        ereturn matrix effects    = stmata_b
+    }
 
     di ""
     di as txt "Structural Topic Model" ///
@@ -46,17 +71,37 @@ program stmata, eclass
     di as txt "Engine: topica-core (Rust)" ///
         _col(48) "Vocabulary     = " as res %9.0fc e(n_terms)
     di as txt _col(48) "Topics (K)     = " as res %9.0fc e(k)
+    if `nprev' > 0 ///
+        di as txt _col(48) "Prevalence     = " as res %9.0fc e(n_prevalence) as txt " covariate(s)"
     di as txt _col(48) "Final bound    = " as res %9.2f e(bound)
     di as txt "Mean semantic coherence  = " as res %9.2f e(coherence) ///
         _col(48) "Mean exclusivity = " as res %9.2f e(exclusivity)
-    di as txt "Topic proportions written to " as res "`prefix'1-`prefix'`k'" ///
+    di as txt "Topic proportions written to " as res "`generate'1-`generate'`k'" ///
         as txt " (EM iters " as res %9.0f e(iters) as txt ")"
+
+    if `nprev' > 0 {
+        di ""
+        di as txt "Covariate effects on topic proportions (method of composition)"
+        tempname B SE
+        matrix `B'  = e(effects)
+        matrix `SE' = e(effects_se)
+        local ci = 0
+        foreach cov of local prevalence {
+            local ++ci
+            di as txt "Covariate " as res "`cov'" as txt ":"
+            di as txt "    topic {c |}       coef         se"
+            di as txt "    {hline 6}{c +}{hline 24}"
+            forvalues t = 1/`k' {
+                di as txt "    " %5.0f `t' " {c |} " ///
+                    as res %10.4f `B'[`t',`ci'] "  " %10.4f `SE'[`t',`ci']
+            }
+        }
+    }
 end
 
 // --------------------------------------------------------------------------
-// One-time plugin load. This is BARE top-level code (not inside a program):
-// a plugin loaded inside a running program does not register for `plugin call`
-// in other scopes, so it must load here, when this ado is sourced/auto-loaded.
+// One-time plugin load. BARE top-level code (not inside a program): a plugin
+// loaded inside a running program does not register for `plugin call` elsewhere.
 // --------------------------------------------------------------------------
 capture findfile stmata.plugin
 if _rc {
