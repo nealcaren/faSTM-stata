@@ -16,6 +16,7 @@ program fastm, eclass
     syntax varname [if] [in], K(integer) ///
         [ PREValence(varlist fv ts) ///
           noLOWercase STOPwords(string) MINdocfreq(integer 1) MAXdocpct(real 100) STEM ///
+          HELDout(real 0) NSTART(integer 1) ///
           SEED(integer 42) ITERs(integer 200) GENerate(name) SAVing(string) replace ]
 
     if `k' < 2 {
@@ -110,7 +111,7 @@ program fastm, eclass
 
     // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence (K+2..).
     plugin call fastmplugin `varlist' `generate'1-`generate'`k' `prevvars' ///
-        if `touse', fit `k' `seed' `iters' `nprev' `mindocfreq' `maxdocpct' `lower'
+        if `touse', fit `k' `seed' `iters' `nprev' `mindocfreq' `maxdocpct' `lower' `heldout' `nstart'
 
     // Post e(b)/e(V) so test/lincom/ereturn display work. Equation = topic#,
     // coefficient = prevalence term (matches the plugin's fill order: topic, term).
@@ -138,6 +139,8 @@ program fastm, eclass
     ereturn scalar coherence    = scalar(fastm_coh)
     ereturn scalar exclusivity  = scalar(fastm_excl)
     ereturn scalar n_prevalence = `nprev'
+    ereturn scalar nstart = `nstart'
+    if `heldout' > 0 ereturn scalar heldout_ll = scalar(fastm_heldout)
     ereturn local prev_terms "`collabels'"
     ereturn local prevalence "`prevalence'"
     ereturn local generate   "`generate'"

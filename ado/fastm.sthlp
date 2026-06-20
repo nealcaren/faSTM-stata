@@ -41,6 +41,12 @@ default {cmd:mindocfreq(1)}{p_end}
 default {cmd:maxdocpct(100)}{p_end}
 {synopt:{opt nolow:ercase}}keep token case (default lowercases){p_end}
 
+{syntab:Diagnostics}
+{synopt:{opt held:out(#)}}also report held-out log-likelihood (document
+completion), holding out #% of each document's tokens{p_end}
+{synopt:{opt nstart(#)}}random restarts; keep the best bound (default 1 =
+deterministic spectral init){p_end}
+
 {syntab:Output}
 {synopt:{opt gen:erate(name)}}stub for the topic-proportion variables; default
 {cmd:generate(theta)}{p_end}
@@ -135,6 +141,8 @@ variables (default {cmd:theta}).
 {synopt:{cmd:e(coherence)}}mean semantic coherence{p_end}
 {synopt:{cmd:e(exclusivity)}}mean exclusivity{p_end}
 {synopt:{cmd:e(n_prevalence)}}number of prevalence terms{p_end}
+{synopt:{cmd:e(nstart)}}number of random restarts{p_end}
+{synopt:{cmd:e(heldout_ll)}}held-out log-likelihood per token (if {opt heldout()}){p_end}
 
 {p2col 5 22 26 2: Macros}{p_end}
 {synopt:{cmd:e(cmd)}}{cmd:fastm}{p_end}
@@ -147,6 +155,7 @@ variables (default {cmd:theta}).
 {synopt:{cmd:e(b)}}covariate-effect coefficients (one equation per topic){p_end}
 {synopt:{cmd:e(V)}}their covariance (block-diagonal by topic){p_end}
 {synopt:{cmd:e(gamma)}}prevalence coefficients (design x K-1){p_end}
+{synopt:{cmd:e(topiccorr)}}topic correlation matrix (K x K){p_end}
 
 
 {marker postestimation}{...}
@@ -158,6 +167,9 @@ one equation per topic), so the usual tools apply:{p_end}
 {phang2}{cmd:. lincom [topic1]year - [topic2]year}{p_end}
 {phang2}{cmd:. margins party, predict(equation(topic1))}{p_end}
 {phang2}{cmd:. marginsplot}{p_end}
+
+{pstd}Representative documents for a topic (highest topic proportion):{p_end}
+{phang2}{cmd:. estat thoughts, topic(}{it:#}{cmd:)} [{cmd:n(}{it:#}{cmd:)}]{p_end}
 
 {pstd}{cmd:predict} after {cmd:fastm} (one topic per call):{p_end}
 {synoptset 30 tabbed}{...}

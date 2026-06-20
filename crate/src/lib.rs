@@ -13,7 +13,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::path::Path;
 use topica_core::corpus::{from_texts, load_stoplist, LoadOptions};
-use topica_core::ctm::{fit_ctm, GammaPrior};
+use topica_core::ctm::{fit_ctm, CtmModel, GammaPrior};
 use topica_core::{effects, inspect};
 
 // Defined in shim.c (thin wrappers over the SF_* macros).
@@ -131,6 +131,77 @@ pub extern "C" fn fastm_entry(argc: c_int, argv: *const *const c_char) -> c_int 
     }
 }
 
+/// Held-out document-completion diagnostics at one K. Splits each document's
+/// tokens (deterministic by seed), fits on the train tokens, scores the held-out
+/// tokens. `prevalence_full` is the design aligned to `corpus.docs` (kept rows are
+/// selected internally). Returns (heldout_ll_per_token, n_test, bound, mean_coh,
+/// mean_excl).
+fn heldout_completion(
+    corpus: &topica_core::corpus::Corpus,
+    k: usize,
+    em_iters: usize,
+    prevalence_full: Option<&[Vec<f64>]>,
+    heldout: f64,
+    seed: u64,
+) -> (f64, u64, f64, f64, f64) {
+    let v = corpus.num_types();
+    let mut split_rng = ChaCha8Rng::seed_from_u64(seed ^ 0x5EED_5EED_5EED_5EED);
+    let mut train: Vec<Vec<u32>> = Vec::new();
+    let mut test: Vec<Vec<u32>> = Vec::new();
+    let mut keep: Vec<usize> = Vec::new();
+    for (di, doc) in corpus.docs.iter().enumerate() {
+        let mut tr = Vec::new();
+        let mut te = Vec::new();
+        for &w in doc {
+            if split_rng.gen::<f64>() < heldout {
+                te.push(w);
+            } else {
+                tr.push(w);
+            }
+        }
+        if !tr.is_empty() {
+            train.push(tr);
+            test.push(te);
+            keep.push(di);
+        }
+    }
+    let dd = train.len();
+    if dd < 2 {
+        return (0.0, 0, 0.0, 0.0, 0.0);
+    }
+    let prev: Option<Vec<Vec<f64>>> =
+        prevalence_full.map(|pf| keep.iter().map(|&di| pf[di].clone()).collect());
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let model = fit_ctm(
+        &train, k, v, em_iters, 1e-5, 0.0, prev.as_deref(), None, true, None,
+        GammaPrior::Pooled, false, false, &mut rng,
+    );
+    let theta = model.doc_topics();
+    let mut sum_lp = 0.0f64;
+    let mut n_test = 0u64;
+    for i in 0..dd {
+        for &w in &test[i] {
+            let mut p = 0.0f64;
+            for t in 0..k {
+                p += theta[i][t] * model.beta[t][w as usize];
+            }
+            sum_lp += p.max(1e-300).ln();
+            n_test += 1;
+        }
+    }
+    let ll = if n_test > 0 { sum_lp / n_test as f64 } else { 0.0 };
+    let mm = 10usize.min(v);
+    let coh = inspect::semantic_coherence(&model.beta, &train, mm);
+    let excl = inspect::exclusivity(&model.beta, mm, 0.7);
+    (
+        ll,
+        n_test,
+        model.bound,
+        coh.iter().sum::<f64>() / k as f64,
+        excl.iter().sum::<f64>() / k as f64,
+    )
+}
+
 /// M1: fit an STM (no covariates yet) and write topic proportions back.
 /// Varlist: text var (1) followed by K theta vars (2..K+1).
 /// Args: `fit <K> [seed=42] [em_iters=100]`.
@@ -142,6 +213,12 @@ fn fit_op(a: &[String]) -> c_int {
     let mindf: u32 = a.get(5).and_then(|s| s.parse().ok()).unwrap_or(1);
     let maxdpct: f64 = a.get(6).and_then(|s| s.parse().ok()).unwrap_or(100.0);
     let lower: bool = a.get(7).and_then(|s| s.parse::<i32>().ok()).unwrap_or(1) != 0;
+    let heldout: f64 = a
+        .get(8)
+        .and_then(|s| s.parse::<f64>().ok())
+        .map(|x| (x / 100.0).clamp(0.0, 0.95))
+        .unwrap_or(0.0);
+    let nstart: usize = a.get(9).and_then(|s| s.parse().ok()).unwrap_or(1).max(1);
     if k < 2 {
         err("fastm: k must be >= 2 (usage: fit <K> [seed] [em_iters] [nprev])\n");
         return 198;
@@ -243,24 +320,47 @@ fn fit_op(a: &[String]) -> c_int {
     };
     let want_effects = nprev > 0;
 
-    let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    let model = fit_ctm(
-        &corpus.docs,
-        k,
-        v,
-        em_iters,
-        1e-5,
-        0.0,
-        prevalence.as_deref(), // prevalence covariates (#3a)
-        None,                  // no content (later)
-        true,                  // spectral init (STM default)
-        None,
-        GammaPrior::Pooled,
-        want_effects, // keep_nu: needed for estimateEffect (#3b)
-        false,        // diagonal
-        &mut rng,
-    );
+    // nstart>1: random multi-start (stm selectModel), keep the best bound.
+    // nstart==1 (default): deterministic spectral init.
+    let model: CtmModel = if nstart <= 1 {
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        fit_ctm(
+            &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), None,
+            true, None, GammaPrior::Pooled, want_effects, false, &mut rng,
+        )
+    } else {
+        let mut best: Option<CtmModel> = None;
+        for s in 0..nstart {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed.wrapping_add(s as u64));
+            let m = fit_ctm(
+                &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), None,
+                false, None, GammaPrior::Pooled, want_effects, false, &mut rng,
+            );
+            if best.as_ref().map_or(true, |b| m.bound > b.bound) {
+                best = Some(m);
+            }
+        }
+        say(&format!(
+            "fastm: nstart={} random inits; kept the best bound\n",
+            nstart
+        ));
+        best.unwrap()
+    };
     let theta = model.doc_topics(); // d x k
+
+    // heldout(): document-completion held-out log-likelihood for this fit (a
+    // separate train/test split + fit; the reported model above uses all tokens).
+    if heldout > 0.0 {
+        let (hll, hn, _, _, _) =
+            heldout_completion(&corpus, k, em_iters, prevalence.as_deref(), heldout, seed);
+        if hn > 0 {
+            save_scalar("fastm_heldout", hll);
+            say(&format!(
+                "fastm: held-out log-likelihood = {:.4} ({} test tokens)\n",
+                hll, hn
+            ));
+        }
+    }
 
     // Write theta back: surviving corpus doc -> original obs via doc_names offset.
     for (di, name) in corpus.doc_names.iter().enumerate() {
@@ -460,37 +560,12 @@ fn searchk_op(a: &[String]) -> c_int {
         return 198;
     }
 
-    // Hold out a fraction of each document's tokens (deterministic by seed).
-    let mut split_rng = ChaCha8Rng::seed_from_u64(seed ^ 0x5EED_5EED_5EED_5EED);
-    let mut train_docs: Vec<Vec<u32>> = Vec::new();
-    let mut test_docs: Vec<Vec<u32>> = Vec::new();
-    let mut keep_off: Vec<usize> = Vec::new();
-    for (di, doc) in corpus.docs.iter().enumerate() {
-        let mut tr = Vec::new();
-        let mut te = Vec::new();
-        for &w in doc {
-            if split_rng.gen::<f64>() < heldout {
-                te.push(w);
-            } else {
-                tr.push(w);
-            }
-        }
-        if !tr.is_empty() {
-            train_docs.push(tr);
-            test_docs.push(te);
-            keep_off.push(corpus.doc_names[di].parse().unwrap_or(usize::MAX));
-        }
-    }
-    let dd = train_docs.len();
-    if dd < 2 {
-        err("fastm: too few documents after the held-out split\n");
-        return 198;
-    }
-
-    // Prevalence design aligned to kept docs (prevalence vars start at index 2).
+    // Prevalence design aligned to corpus.docs (prevalence vars start at index 2);
+    // the helper selects the kept rows after the held-out split.
     let prevalence: Option<Vec<Vec<f64>>> = if nprev > 0 {
-        let mut x = Vec::with_capacity(dd);
-        for &o in &keep_off {
+        let mut x = Vec::with_capacity(corpus.num_docs());
+        for name in &corpus.doc_names {
+            let o: usize = name.parse().unwrap_or(usize::MAX);
             let obs = obs_of_offset.get(o).copied().unwrap_or(i1);
             let mut row = Vec::with_capacity(1 + nprev);
             row.push(1.0);
@@ -506,47 +581,16 @@ fn searchk_op(a: &[String]) -> c_int {
         None
     };
 
-    let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    let model = fit_ctm(
-        &train_docs,
-        k,
-        v,
-        em_iters,
-        1e-5,
-        0.0,
-        prevalence.as_deref(),
-        None,
-        true,
-        None,
-        GammaPrior::Pooled,
-        false,
-        false,
-        &mut rng,
-    );
-    let theta = model.doc_topics();
-
-    // Document-completion held-out log-likelihood, per held-out token.
-    let mut sum_lp = 0.0f64;
-    let mut n_test = 0u64;
-    for i in 0..dd {
-        for &w in &test_docs[i] {
-            let mut p = 0.0f64;
-            for t in 0..k {
-                p += theta[i][t] * model.beta[t][w as usize];
-            }
-            sum_lp += p.max(1e-300).ln();
-            n_test += 1;
-        }
+    let (heldout_ll, n_test, bound, mean_coh, mean_excl) =
+        heldout_completion(&corpus, k, em_iters, prevalence.as_deref(), heldout, seed);
+    if n_test == 0 {
+        err("fastm: too few documents/tokens after the held-out split\n");
+        return 198;
     }
-    let heldout_ll = if n_test > 0 { sum_lp / n_test as f64 } else { 0.0 };
-
-    let mm = 10usize.min(v);
-    let coh = inspect::semantic_coherence(&model.beta, &train_docs, mm);
-    let excl = inspect::exclusivity(&model.beta, mm, 0.7);
     save_scalar("fastm_sk_heldout", heldout_ll);
-    save_scalar("fastm_sk_bound", model.bound);
-    save_scalar("fastm_sk_coh", coh.iter().sum::<f64>() / k as f64);
-    save_scalar("fastm_sk_excl", excl.iter().sum::<f64>() / k as f64);
+    save_scalar("fastm_sk_bound", bound);
+    save_scalar("fastm_sk_coh", mean_coh);
+    save_scalar("fastm_sk_excl", mean_excl);
     say(&format!(
         "fastm: searchk K={} done (held-out LL={:.4}, {} test tokens)\n",
         k, heldout_ll, n_test
