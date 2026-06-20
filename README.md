@@ -81,8 +81,9 @@ help fastm
 ```
 
 This installs the ado files and the plugins for all three operating systems;
-`fastm.ado` loads the one matching yours. All binaries are x86_64 (Stata is an
-x86_64 program; on Apple Silicon it runs under Rosetta). Requires Stata 15+.
+`fastm.ado` loads the one matching yours. The macOS plugin is a universal binary
+(Intel and Apple Silicon), so it works on native Apple Silicon Stata as well as
+under Rosetta; the Linux and Windows plugins are x86_64. Requires Stata 15+.
 
 Prebuilt binaries are also attached to each
 [release](https://github.com/nealcaren/faSTM-stata/releases) if you prefer to
@@ -97,7 +98,7 @@ The Rust core compiles into a Stata plugin. To build it yourself you need a Rust
 toolchain (end users will not, once binaries are shipped):
 
 ```sh
-bash build/build.sh          # -> ./fastm.plugin  (x86_64: Stata 15 is x86_64)
+bash build/build.sh          # -> ./fastm.plugin  (universal on macOS, x86_64 on Linux)
 ```
 
 Then, from the repo root in Stata:
@@ -107,13 +108,14 @@ Then, from the repo root in Stata:
 . do examples/margins_demo.do
 ```
 
-`build.sh` targets `x86_64` on both macOS (a `-bundle`) and Linux
-(`-shared`), since Stata 15 is an x86_64 binary even on Apple Silicon. On Windows,
-`build/build.ps1` does the same with MSVC (run it from a Developer PowerShell for
-VS). The `build` GitHub Actions workflow compiles the plugin on Linux, macOS, and
-Windows on every push and uploads each `fastm.plugin` as an artifact, so a Windows
-binary is produced without a Windows machine. It still needs a smoke test on a
-Windows copy of Stata before release.
+On macOS `build.sh` builds a universal `-bundle` (x86_64 + arm64, combined with
+`lipo`), so the plugin loads in both Intel/Rosetta Stata and native Apple Silicon
+Stata; set `MACOS_ARCHS=arm64` for a faster single-arch dev build. On Linux it
+builds an x86_64 `-shared` object. On Windows, `build/build.ps1` does the same with
+MSVC (run it from a Developer PowerShell for VS). The `build` GitHub Actions
+workflow compiles the plugin on Linux, macOS, and Windows on every push and uploads
+each as an artifact, so a Windows binary is produced without a Windows machine. It
+still needs a smoke test on a Windows copy of Stata before release.
 
 ## How it fits together
 
