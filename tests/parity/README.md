@@ -41,6 +41,26 @@ runs `fastm text, k(20) content(liberal)` on the same `.dta`.
 
 Topics align by position; FREX labels match (minor FREX rank ties on near-equal
 words); per-topic coherence matches for most topics, the rest within the
-non-convex-optimum tolerance (same pattern faSTM shows vs stm). `fastm` uses
-faSTM's engine (`topica-core`), so the residual differences come from internal
-vocabulary ordering in the spectral initialization, not the math.
+non-convex-optimum tolerance. `fastm` uses faSTM's engine (`topica-core`), so the
+residual bound differences come from internal vocabulary ordering in the spectral
+initialization, not the math.
+
+## Versus the original stm package (`compare_stm.R`)
+
+The table above is against **faSTM**, which shares fastm's engine, so the match is
+numerical (bounds agree to <0.001%). The **original stm** package is an independent
+implementation: it optimizes the same model differently and reaches a different
+local optimum, so its bound differs by about 0.08% (it actually lands a bit higher,
+e.g. -6,937,826 vs -6,943,448 for the prevalence model). The right check there is
+topic recovery, not the bound. `compare_stm.R` fits stm, matches its 20 topics to
+fastm's one-to-one, and reports:
+
+| stm vs fastm, 20 matched topics | mean | median | min |
+|---|---|---|---|
+| topic-word correlation | 0.95 | 0.996 | 0.35 |
+| top-10 word overlap (Jaccard) | 0.79 | 0.82 | |
+
+Most topics are near-identical (median r 0.996); one of 20 diverges, the expected
+behavior of two optimizers on a non-convex objective. Run: export fastm's beta with
+`fastm ..., saving("fastm_beta.dta")`, then `Rscript tests/parity/compare_stm.R`.
+This comparison is Appendix A of the article.
