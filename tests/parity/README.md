@@ -15,13 +15,22 @@ from the stm/faSTM vignette.
 
 Run: `Rscript tests/parity/export_poliblog.R` then `do tests/parity/parity_check.do`.
 
+### Spline (`s(day)`) case
+
+`export_spline_gold.R` fits the reference with a smooth `prevalence = ~ s(day)`
+term (writing `gold_spline_bound.txt`); `parity_check_spline.do` runs
+`fastm text, k(20) spline(day, df(10))` on the same `.dta`. This checks that
+fastm's B-spline basis spans stm's `s()` design space (same quantile knots), so the
+fit matches even though the basis parameterization (the gammas) differs.
+
 ## Result (2026-06)
 
 | quantity | fastm | faSTM gold |
 |---|---|---|
 | vocabulary V | 2632 | 2632 |
 | documents D | 5000 | 5000 |
-| final bound | -6,943,448 | -6,943,536 (Δ 0.001%) |
+| final bound, `~rating` | -6,943,448 | -6,943,536 (Δ 0.001%) |
+| final bound, `s(day)` | -6,943,287 | -6,943,310 (Δ 0.0003%) |
 
 Topics align by position; FREX labels match (minor FREX rank ties on near-equal
 words); per-topic coherence matches for most topics, the rest within the
