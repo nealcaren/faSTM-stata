@@ -84,18 +84,13 @@ program searchk, rclass
     return local cmd "searchk"
 end
 
-// Plugin loader (bare top level; shared with fastm.ado): dev build first, then
-// the per-OS plugin shipped with the package.
+// Plugin load: BARE top-level code (auto-load runs this; an in-program load does
+// not persist). Dev build first, else the per-OS plugin shipped with the package.
 capture findfile fastm.plugin
 if _rc {
     if "`c(os)'" == "Windows"      local _fpl fastm-windows-x86_64.plugin
-    else if "`c(os)'" == "MacOSX"  local _fpl fastm-macos-x86_64.plugin
+    else if strpos("`c(machine_type)'", "Mac") local _fpl fastm-macos-x86_64.plugin
     else                            local _fpl fastm-linux-x86_64.plugin
     capture findfile `_fpl'
 }
-if _rc {
-    di as error "searchk: plugin not found on the adopath"
-}
-else {
-    capture program fastmplugin, plugin using(`"`r(fn)'"')
-}
+if !_rc capture program fastmplugin, plugin using(`"`r(fn)'"')
