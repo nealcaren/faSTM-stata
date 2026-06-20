@@ -13,6 +13,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use topica_core::corpus::{from_texts, LoadOptions};
 use topica_core::ctm::{fit_ctm, GammaPrior};
+use topica_core::inspect;
 
 // Defined in shim.c (thin wrappers over the SF_* macros).
 extern "C" {
@@ -196,31 +197,40 @@ fn fit_op(a: &[String]) -> c_int {
         }
     }
 
+    // FREX labels + coherence/exclusivity diagnostics (topica_core::inspect).
+    let frex = inspect::frex_scores(&model.beta, &corpus.total_freqs, 0.5);
+    let labels = inspect::top_words(&frex, 8usize.min(v));
+    let mm = 10usize.min(v);
+    let coh = inspect::semantic_coherence(&model.beta, &corpus.docs, mm);
+    let excl = inspect::exclusivity(&model.beta, mm, 0.7);
+    let mean_coh = coh.iter().sum::<f64>() / k as f64;
+    let mean_excl = excl.iter().sum::<f64>() / k as f64;
+
     save_scalar("stmata_K", k as f64);
     save_scalar("stmata_V", v as f64);
     save_scalar("stmata_D", d as f64);
     save_scalar("stmata_bound", model.bound);
     save_scalar("stmata_iters", model.em_iters_run as f64);
+    save_scalar("stmata_coh", mean_coh);
+    save_scalar("stmata_excl", mean_excl);
 
-    say("stmata: top words per topic --\n");
-    let topn = 8usize.min(v);
+    say("stmata: top FREX words per topic [coherence / exclusivity] --\n");
     for t in 0..k {
-        let mut idx: Vec<usize> = (0..v).collect();
-        idx.sort_by(|&p, &q| {
-            model.beta[t][q]
-                .partial_cmp(&model.beta[t][p])
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        let words: Vec<&str> = idx
+        let words: Vec<&str> = labels[t]
             .iter()
-            .take(topn)
             .map(|&w| corpus.id_to_word[w].as_str())
             .collect();
-        say(&format!("  topic {:>2}: {}\n", t + 1, words.join(" ")));
+        say(&format!(
+            "  topic {:>2} [coh {:>7.2}, excl {:>6.2}]: {}\n",
+            t + 1,
+            coh[t],
+            excl[t],
+            words.join(" ")
+        ));
     }
     say(&format!(
-        "stmata: done. bound={:.2}, iters={}, converged={}\n",
-        model.bound, model.em_iters_run, model.converged
+        "stmata: done. bound={:.2}, iters={}, mean coherence={:.2}, mean exclusivity={:.2}\n",
+        model.bound, model.em_iters_run, mean_coh, mean_excl
     ));
     0
 }

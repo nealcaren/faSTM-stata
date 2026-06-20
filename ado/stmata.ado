@@ -34,6 +34,8 @@ program stmata, eclass
     ereturn scalar N_docs  = scalar(stmata_D)
     ereturn scalar bound  = scalar(stmata_bound)
     ereturn scalar iters  = scalar(stmata_iters)
+    ereturn scalar coherence   = scalar(stmata_coh)
+    ereturn scalar exclusivity = scalar(stmata_excl)
     ereturn local prefix  "`prefix'"
     ereturn local textvar "`varlist'"
     ereturn local cmd     "stmata"
@@ -45,6 +47,8 @@ program stmata, eclass
         _col(48) "Vocabulary     = " as res %9.0fc e(n_terms)
     di as txt _col(48) "Topics (K)     = " as res %9.0fc e(k)
     di as txt _col(48) "Final bound    = " as res %9.2f e(bound)
+    di as txt "Mean semantic coherence  = " as res %9.2f e(coherence) ///
+        _col(48) "Mean exclusivity = " as res %9.2f e(exclusivity)
     di as txt "Topic proportions written to " as res "`prefix'1-`prefix'`k'" ///
         as txt " (EM iters " as res %9.0f e(iters) as txt ")"
 end
