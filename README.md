@@ -71,6 +71,24 @@ machinery works:
   a dataset.
 - **Replay** (bare `fastm`) and full **help files** (`help fastm`, `help searchk`).
 
+## Install
+
+End users need the ado files plus a prebuilt `fastm.plugin` for their OS; no Rust
+or Python toolchain.
+
+**Prebuilt (recommended).** Download `fastm.plugin` for your platform from the
+[latest release](https://github.com/nealcaren/faSTM-stata/releases) (the `build`
+CI builds Linux, macOS, and Windows binaries), put it and the contents of `ado/`
+somewhere on your Stata adopath, then:
+
+```stata
+. run "fastm.ado"      // or have it on the adopath
+. help fastm
+```
+
+**From source.** Clone the repo and run the build (needs a Rust toolchain); see
+[Build](#build) below.
+
 ## Build
 
 The Rust core compiles into a Stata plugin. To build it yourself you need a Rust
