@@ -226,6 +226,7 @@ fn fit_op(a: &[String]) -> c_int {
         .map(|x| (x / 100.0).clamp(0.0, 0.95))
         .unwrap_or(0.0);
     let nstart: usize = a.get(9).and_then(|s| s.parse().ok()).unwrap_or(1).max(1);
+    let ncgroups: usize = a.get(10).and_then(|s| s.parse().ok()).unwrap_or(0);
     if k < 2 {
         err("fastm: k must be >= 2 (usage: fit <K> [seed] [em_iters] [nprev])\n");
         return 198;
@@ -334,12 +335,35 @@ fn fit_op(a: &[String]) -> c_int {
     };
     let want_effects = nprev > 0;
 
+    // content(): SAGE content covariate (per-doc group index, num_groups). The
+    // content variable is the last in the varlist (after text, theta, prevalence).
+    let content_groups: Option<Vec<usize>> = if ncgroups >= 2 {
+        let cvar = (2 + k + nprev) as c_int;
+        let mut g = Vec::with_capacity(d);
+        for name in &corpus.doc_names {
+            let off: usize = name.parse().unwrap_or(usize::MAX);
+            let obs = obs_of_offset.get(off).copied().unwrap_or(i1);
+            let mut val: c_double = 0.0;
+            unsafe { rs_vdata(cvar, obs, &mut val) };
+            let gi = if val.is_finite() && val >= 0.0 { val as usize } else { 0 };
+            g.push(gi.min(ncgroups - 1));
+        }
+        say(&format!(
+            "fastm: content model (SAGE) with {} group(s)\n",
+            ncgroups
+        ));
+        Some(g)
+    } else {
+        None
+    };
+    let content_arg = content_groups.as_ref().map(|g| (g.as_slice(), ncgroups));
+
     // nstart>1: random multi-start (stm selectModel), keep the best bound.
     // nstart==1 (default): deterministic spectral init.
     let model: CtmModel = if nstart <= 1 {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         fit_ctm(
-            &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), None,
+            &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), content_arg,
             true, None, GammaPrior::Pooled, want_effects, false, &mut rng,
         )
     } else {
@@ -347,7 +371,7 @@ fn fit_op(a: &[String]) -> c_int {
         for s in 0..nstart {
             let mut rng = ChaCha8Rng::seed_from_u64(seed.wrapping_add(s as u64));
             let m = fit_ctm(
-                &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), None,
+                &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), content_arg,
                 false, None, GammaPrior::Pooled, want_effects, false, &mut rng,
             );
             if best.as_ref().map_or(true, |b| m.bound > b.bound) {
@@ -465,6 +489,7 @@ fn fit_op(a: &[String]) -> c_int {
     save_scalar("fastm_iters", model.em_iters_run as f64);
     save_scalar("fastm_coh", mean_coh);
     save_scalar("fastm_excl", mean_excl);
+    save_scalar("fastm_ncgroups", ncgroups as f64);
 
     say("fastm: top FREX words per topic [coherence / exclusivity] --\n");
     for t in 0..k {

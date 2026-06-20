@@ -14,7 +14,7 @@ program fastm, eclass
     }
 
     syntax varname [if] [in], K(integer) ///
-        [ PREValence(varlist fv ts) SPline(string) ///
+        [ PREValence(varlist fv ts) SPline(string) CONTent(varname) ///
           noLOWercase STOPwords(string) MINdocfreq(integer 1) MAXdocpct(real 100) STEM ///
           HELDout(real 0) NSTART(integer 1) ///
           SEED(integer 42) ITERs(integer 200) GENerate(name) SAVing(string) replace ]
@@ -125,6 +125,25 @@ program fastm, eclass
             mata: fastm_bs("`sv'", "`touse'", "`sbv'", `sdf', `sdeg')
         }
     }
+
+    // content(var): SAGE content covariate (a single categorical). Encode its
+    // levels to 0-based group indices for the engine; passed as the last varlist
+    // column (not part of the prevalence design).
+    local ng 0
+    local cgrp ""
+    if "`content'" != "" {
+        tempvar cgrp
+        egen `cgrp' = group(`content') if `touse'
+        markout `touse' `cgrp'
+        quietly summarize `cgrp', meanonly
+        local ng = r(max)
+        if `ng' < 2 {
+            di as error "content() needs at least 2 groups"
+            exit 198
+        }
+        quietly replace `cgrp' = `cgrp' - 1   // 0-based for the engine
+    }
+
     local nprev : word count `prevvars'
 
     forvalues t = 1/`k' {
@@ -151,9 +170,10 @@ program fastm, eclass
     // Clear any stale labels from a previous fit (the plugin repopulates them).
     capture macro drop fastm_lbl_*
 
-    // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence (K+2..).
-    plugin call fastmplugin `varlist' `generate'1-`generate'`k' `prevvars' ///
-        if `touse', fit `k' `seed' `iters' `nprev' `mindocfreq' `maxdocpct' `lower' `heldout' `nstart'
+    // Varlist order the plugin expects: text (1), theta (2..K+1), prevalence,
+    // then the content group var (last) when content() is used.
+    plugin call fastmplugin `varlist' `generate'1-`generate'`k' `prevvars' `cgrp' ///
+        if `touse', fit `k' `seed' `iters' `nprev' `mindocfreq' `maxdocpct' `lower' `heldout' `nstart' `ng'
 
     // Post e(b)/e(V) so test/lincom/ereturn display work. Equation = topic#,
     // coefficient = prevalence term (matches the plugin's fill order: topic, term).
@@ -181,7 +201,9 @@ program fastm, eclass
     ereturn scalar coherence    = scalar(fastm_coh)
     ereturn scalar exclusivity  = scalar(fastm_excl)
     ereturn scalar n_prevalence = `nprev'
+    ereturn scalar n_content = `ng'
     ereturn scalar nstart = `nstart'
+    if "`content'" != "" ereturn local content "`content'"
     if `heldout' > 0 ereturn scalar heldout_ll = scalar(fastm_heldout)
     ereturn local prev_terms "`collabels'"
     ereturn local prevalence "`prevalence'"
@@ -232,6 +254,8 @@ program fastm_display
     di as txt _col(48) "Topics (K)     = " as res %9.0fc e(k)
     if e(n_prevalence) > 0 ///
         di as txt _col(48) "Prevalence     = " as res %9.0fc e(n_prevalence) as txt " term(s)"
+    if e(n_content) > 0 ///
+        di as txt _col(48) "Content groups = " as res %9.0fc e(n_content)
     di as txt _col(48) "Final bound    = " as res %9.2f e(bound)
     di as txt "Mean semantic coherence  = " as res %9.2f e(coherence) ///
         _col(48) "Mean exclusivity = " as res %9.2f e(exclusivity)

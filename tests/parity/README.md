@@ -23,6 +23,12 @@ term (writing `gold_spline_bound.txt`); `parity_check_spline.do` runs
 fastm's B-spline basis spans stm's `s()` design space (same quantile knots), so the
 fit matches even though the basis parameterization (the gammas) differs.
 
+### Content (`content = ~rating`) case
+
+`export_content_gold.R` fits the reference SAGE content model
+(`content = ~rating`, writing `gold_content_bound.txt`); `parity_check_content.do`
+runs `fastm text, k(20) content(liberal)` on the same `.dta`.
+
 ## Result (2026-06)
 
 | quantity | fastm | faSTM gold |
@@ -31,6 +37,7 @@ fit matches even though the basis parameterization (the gammas) differs.
 | documents D | 5000 | 5000 |
 | final bound, `~rating` | -6,943,448 | -6,943,536 (Δ 0.001%) |
 | final bound, `s(day)` | -6,943,287 | -6,943,310 (Δ 0.0003%) |
+| final bound, `content=~rating` | -6,969,239.0 | -6,969,239.5 (Δ 7e-6%) |
 
 Topics align by position; FREX labels match (minor FREX rank ties on near-equal
 words); per-topic coherence matches for most topics, the rest within the

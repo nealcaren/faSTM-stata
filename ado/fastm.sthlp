@@ -30,6 +30,8 @@ where {varname} is a string variable holding one document per observation.
 ({cmd:i.}, {cmd:c.}, {cmd:##}) allowed{p_end}
 {synopt:{opt sp:line(varlist[, df(#) degree(#)])}}B-spline basis of continuous
 covariate(s) in prevalence (stm's {cmd:s()}); default {cmd:df(10) degree(3)}{p_end}
+{synopt:{opt cont:ent(varname)}}content covariate: a single categorical that
+shifts topic-word distributions (stm's SAGE content model){p_end}
 {synopt:{opt iter:s(#)}}maximum EM iterations; default {cmd:iters(200)}{p_end}
 {synopt:{opt seed(#)}}random seed (used for random init and the effect draws);
 default {cmd:seed(42)}{p_end}
@@ -96,6 +98,12 @@ at sample quantiles. The basis columns ({it:var}{cmd:_s1}, {it:var}{cmd:_s2}, ..
 enter {cmd:e(b)} like any other prevalence term, so {cmd:test} and {cmd:lincom}
 work on them. Combine with {opt prevalence()} for mixed designs.
 
+{phang}{opt content(varname)} adds a content covariate: a single categorical
+variable whose levels shift the topic-word distributions, via the SAGE content
+model inside STM (stm's {cmd:content =}). Prevalence covariates explain which
+topics a document is about; a content covariate explains how the words of a topic
+differ across groups. Combine with {opt prevalence()} and {opt spline()}.
+
 {phang}{opt iters(#)} caps the EM iterations (default 200); the fit stops earlier
 on convergence.
 
@@ -150,6 +158,7 @@ variables (default {cmd:theta}).
 {synopt:{cmd:e(coherence)}}mean semantic coherence{p_end}
 {synopt:{cmd:e(exclusivity)}}mean exclusivity{p_end}
 {synopt:{cmd:e(n_prevalence)}}number of prevalence terms{p_end}
+{synopt:{cmd:e(n_content)}}number of content-covariate groups (0 if none){p_end}
 {synopt:{cmd:e(nstart)}}number of random restarts{p_end}
 {synopt:{cmd:e(heldout_ll)}}held-out log-likelihood per token (if {opt heldout()}){p_end}
 
@@ -157,6 +166,7 @@ variables (default {cmd:theta}).
 {synopt:{cmd:e(cmd)}}{cmd:fastm}{p_end}
 {synopt:{cmd:e(textvar)}}name of the text variable{p_end}
 {synopt:{cmd:e(prevalence)}}prevalence specification{p_end}
+{synopt:{cmd:e(content)}}content variable (if any){p_end}
 {synopt:{cmd:e(prev_terms)}}expanded prevalence term names{p_end}
 {synopt:{cmd:e(generate)}}topic-proportion variable stub{p_end}
 
