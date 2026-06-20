@@ -490,9 +490,17 @@ end
 // One-time plugin load. BARE top-level code (not inside a program): a plugin
 // loaded inside a running program does not register for `plugin call` elsewhere.
 // --------------------------------------------------------------------------
+// Prefer a local dev build (fastm.plugin from build.sh); otherwise load the
+// per-OS plugin shipped with the package (net install puts it on the adopath).
 capture findfile fastm.plugin
 if _rc {
-    di as error "fastm: fastm.plugin not found on the adopath (or current dir)"
+    if "`c(os)'" == "Windows"      local _fpl fastm-windows-x86_64.plugin
+    else if "`c(os)'" == "MacOSX"  local _fpl fastm-macos-x86_64.plugin
+    else                            local _fpl fastm-linux-x86_64.plugin
+    capture findfile `_fpl'
+}
+if _rc {
+    di as error "fastm: plugin not found on the adopath"
 }
 else {
     capture program fastmplugin, plugin using(`"`r(fn)'"')

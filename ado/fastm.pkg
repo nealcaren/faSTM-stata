@@ -1,0 +1,21 @@
+v 3
+d 'fastm': Structural Topic Models in Stata
+d
+d Structural Topic Models, backed by the Rust engine topica-core. Fitting,
+d tokenization, labels, diagnostics, and covariate-effect estimation run in a
+d precompiled plugin: no Python or Rust toolchain is needed to use it.
+d
+d Requires Stata 15 or newer (x86_64). The per-OS plugins below are all shipped;
+d fastm.ado loads the one matching your operating system.
+d
+d Distribution-Date: 20260620
+d Author: Neal Caren, neal.caren@unc.edu
+d
+f fastm.ado
+f fastm.sthlp
+f searchk.ado
+f searchk.sthlp
+f fastm_english.stops
+f fastm-linux-x86_64.plugin
+f fastm-macos-x86_64.plugin
+f fastm-windows-x86_64.plugin

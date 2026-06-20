@@ -73,22 +73,20 @@ machinery works:
 
 ## Install
 
-End users need the ado files plus a prebuilt `fastm.plugin` for their OS; no Rust
-or Python toolchain.
-
-**Prebuilt (recommended).** From the
-[latest release](https://github.com/nealcaren/faSTM-stata/releases), download the
-plugin for your OS (`fastm-linux-x86_64.plugin`, `fastm-macos-x86_64.plugin`, or
-`fastm-windows-x86_64.plugin`) and **rename it to `fastm.plugin`**. Put it and the
-contents of `ado/` (`fastm.ado`, `fastm.sthlp`, `searchk.ado`, `searchk.sthlp`,
-`fastm_english.stops`) somewhere on your Stata adopath, then:
+No Python or Rust toolchain needed. From Stata:
 
 ```stata
-. help fastm
+net install fastm, from("https://raw.githubusercontent.com/nealcaren/faSTM-stata/main/ado/") replace
+help fastm
 ```
 
-All binaries are x86_64 (Stata is an x86_64 program; on Apple Silicon it runs under
-Rosetta).
+This installs the ado files and the plugins for all three operating systems;
+`fastm.ado` loads the one matching yours. All binaries are x86_64 (Stata is an
+x86_64 program; on Apple Silicon it runs under Rosetta). Requires Stata 15+.
+
+Prebuilt binaries are also attached to each
+[release](https://github.com/nealcaren/faSTM-stata/releases) if you prefer to
+place them on the adopath by hand.
 
 **From source.** Clone the repo and run the build (needs a Rust toolchain); see
 [Build](#build) below.

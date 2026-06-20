@@ -1,9 +1,9 @@
 # Rust
 crate/target/
 
-# build artifacts
+# build artifacts (root dev build only; per-OS release plugins live in ado/)
 build/*.o
-*.plugin
+/fastm.plugin
 
 # Stata
 *.smcl

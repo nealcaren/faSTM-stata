@@ -1,0 +1,3 @@
+v 3
+d faSTM-stata: Structural Topic Models in Stata (engine: topica-core, Rust)
+p fastm   Structural Topic Models: fastm, searchk
