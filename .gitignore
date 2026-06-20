@@ -11,3 +11,6 @@ build/*.o
 
 # OS
 .DS_Store
+
+# parity fixtures (regenerate via tests/parity/export_poliblog.R)
+tests/parity/*.dta

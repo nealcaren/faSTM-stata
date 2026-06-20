@@ -64,17 +64,22 @@ fn read_string(var: c_int, obs: c_int) -> String {
     }
     let cap = len as usize + 2;
     let mut buf = vec![0u8; cap];
-    let rc = unsafe {
-        if rs_var_is_strl(var) != 0 {
-            rs_strldata(var, obs, buf.as_mut_ptr() as *mut c_char, cap as c_int)
-        } else {
-            rs_sdata(var, obs, buf.as_mut_ptr() as *mut c_char)
+    if unsafe { rs_var_is_strl(var) } != 0 {
+        // SF_strldata returns the byte count, not a 0-success code; the
+        // zero-initialized buffer NUL-terminates, so read up to the NUL/len below.
+        unsafe { rs_strldata(var, obs, buf.as_mut_ptr() as *mut c_char, cap as c_int) };
+    } else {
+        // SF_sdata returns a Stata return code (0 = ok).
+        let rc = unsafe { rs_sdata(var, obs, buf.as_mut_ptr() as *mut c_char) };
+        if rc != 0 {
+            return String::new();
         }
-    };
-    if rc != 0 {
-        return String::new();
     }
-    let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+    let end = buf[..cap]
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(len as usize)
+        .min(len as usize);
     String::from_utf8_lossy(&buf[..end]).into_owned()
 }
 
