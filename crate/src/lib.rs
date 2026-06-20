@@ -277,6 +277,14 @@ fn fit_op(a: &[String]) -> c_int {
         }
     }
 
+    // Topic correlation matrix (stm topicCorr) -> e(topiccorr).
+    let tc = model.topic_correlation();
+    for a in 0..k {
+        for b in 0..k {
+            mat_store("fastm_tc", a + 1, b + 1, tc[a][b]);
+        }
+    }
+
     // FREX labels + coherence/exclusivity diagnostics (topica_core::inspect).
     let frex = inspect::frex_scores(&model.beta, &corpus.total_freqs, 0.5);
     let labels = inspect::top_words(&frex, 8usize.min(v));

@@ -97,6 +97,9 @@ program fastm, eclass
         quietly generate double `generate'`t' = .
     }
 
+    // Topic correlation matrix (filled by the plugin) -> e(topiccorr).
+    matrix fastm_tc = J(`k', `k', .)
+
     // estimateEffect outputs: e(b) row (1 x k*nprev), e(V) (k*nprev square).
     if `nprev' > 0 {
         local pe = `k' * (`nprev' + 1)
@@ -140,6 +143,15 @@ program fastm, eclass
     ereturn local generate   "`generate'"
     ereturn local textvar    "`varlist'"
     ereturn local cmd        "fastm"
+    ereturn local estat_cmd  "fastm_estat"
+
+    local tn ""
+    forvalues t = 1/`k' {
+        local tn `tn' topic`t'
+    }
+    matrix rownames fastm_tc = `tn'
+    matrix colnames fastm_tc = `tn'
+    ereturn matrix topiccorr = fastm_tc
 
     if `nprev' > 0 {
         local gcols ""
@@ -186,6 +198,47 @@ program fastm_display
         di as txt "Covariate effects on topic proportions (method of composition)"
         ereturn display
     }
+end
+
+// estat dispatch (registered via e(estat_cmd)). Supports: thoughts.
+program fastm_estat
+    version 15.0
+    gettoken sub 0 : 0, parse(" ,")
+    if "`sub'" == "thoughts" {
+        fastm_thoughts `0'
+    }
+    else {
+        di as error `"unknown estat subcommand "`sub'""'
+        exit 198
+    }
+end
+
+// estat thoughts: list the highest-theta (representative) documents for a topic.
+program fastm_thoughts
+    version 15.0
+    syntax , Topic(integer) [ N(integer 5) ]
+    if "`e(cmd)'" != "fastm" {
+        di as error "fastm results not found"
+        exit 301
+    }
+    local kk = e(k)
+    if `topic' < 1 | `topic' > `kk' {
+        di as error "topic() must be in 1..`kk'"
+        exit 198
+    }
+    local tv `e(generate)'`topic'
+    capture confirm numeric variable `tv'
+    if _rc {
+        di as error "`tv' is not in the data (topic proportions were dropped); rerun fastm"
+        exit 198
+    }
+    local txt `e(textvar)'
+    di ""
+    di as txt "Representative documents for topic `topic' (highest `tv')"
+    preserve
+    gsort -`tv'
+    list `txt' `tv' in 1/`n', noobs
+    restore
 end
 
 // predict after fastm (xtreg-style). One topic per call via topic(#).
