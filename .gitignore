@@ -14,3 +14,6 @@ build/*.o
 
 # parity fixtures (regenerate via tests/parity/export_poliblog.R)
 tests/parity/*.dta
+
+# internal planning (not part of the public package)
+docs/
