@@ -285,6 +285,35 @@ fn fit_op(a: &[String]) -> c_int {
     let mean_coh = coh.iter().sum::<f64>() / k as f64;
     let mean_excl = excl.iter().sum::<f64>() / k as f64;
 
+    // saving(): write beta (topic-word probabilities) + vocab to a CSV the ado
+    // turns into a dataset. Long form (V rows), so it scales to any vocabulary.
+    let betafile = macro_use("fastm_betafile");
+    if !betafile.is_empty() {
+        use std::io::Write;
+        match std::fs::File::create(&betafile) {
+            Ok(f) => {
+                let mut bw = std::io::BufWriter::new(f);
+                let _ = write!(bw, "word");
+                for t in 0..k {
+                    let _ = write!(bw, ",topic{}", t + 1);
+                }
+                let _ = writeln!(bw);
+                for vv in 0..v {
+                    let _ = write!(bw, "{}", corpus.id_to_word[vv]);
+                    for t in 0..k {
+                        let _ = write!(bw, ",{:.10}", model.beta[t][vv]);
+                    }
+                    let _ = writeln!(bw);
+                }
+                say(&format!(
+                    "fastm: beta+vocab ({} terms x {} topics) saved\n",
+                    v, k
+                ));
+            }
+            Err(e) => err(&format!("fastm: cannot write beta file: {}\n", e)),
+        }
+    }
+
     save_scalar("fastm_K", k as f64);
     save_scalar("fastm_V", v as f64);
     save_scalar("fastm_D", d as f64);

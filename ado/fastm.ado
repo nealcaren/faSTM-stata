@@ -16,7 +16,7 @@ program fastm, eclass
     syntax varname [if] [in], K(integer) ///
         [ PREValence(varlist fv ts) ///
           noLOWercase STOPwords(string) MINdocfreq(integer 1) MAXdocpct(real 100) STEM ///
-          SEED(integer 42) ITERs(integer 200) GENerate(name) replace ]
+          SEED(integer 42) ITERs(integer 200) GENerate(name) SAVing(string) replace ]
 
     if `k' < 2 {
         di as error "k() must be >= 2"
@@ -50,6 +50,18 @@ program fastm, eclass
         }
     }
     global fastm_stopfile `"`stopfile'"'
+
+    // saving(filename[, replace]): the plugin writes beta+vocab to a temp CSV here.
+    local sfile ""
+    local srep ""
+    global fastm_betafile ""
+    if `"`saving'"' != "" {
+        gettoken sfile srest : saving, parse(",")
+        local sfile = trim(`"`sfile'"')
+        if strpos(`"`srest'"', "replace") local srep replace
+        tempfile betacsv
+        global fastm_betafile `"`betacsv'"'
+    }
 
     marksample touse, strok
 
@@ -138,6 +150,16 @@ program fastm, eclass
         matrix colnames fastm_gamma = `gcols'
         ereturn matrix gamma = fastm_gamma
         ereturn local predict "fastm_predict"
+    }
+
+    // saving(): turn the plugin's beta+vocab CSV into a .dta (data preserved).
+    if `"`sfile'"' != "" {
+        preserve
+        import delimited `"`betacsv'"', clear varnames(1) case(preserve)
+        save `"`sfile'"', `srep'
+        restore
+        di as txt "beta + vocabulary written to " as res `"`sfile'"' ///
+            as txt " (`=e(n_terms)' terms x `=e(k)' topics)"
     }
 
     fastm_display
