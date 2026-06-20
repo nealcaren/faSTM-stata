@@ -121,8 +121,26 @@ variables (default {cmd:theta}).
 {synopt:{cmd:e(generate)}}topic-proportion variable stub{p_end}
 
 {p2col 5 22 26 2: Matrices}{p_end}
-{synopt:{cmd:e(effects)}}topics x terms covariate-effect coefficients{p_end}
-{synopt:{cmd:e(effects_se)}}their standard errors{p_end}
+{synopt:{cmd:e(b)}}covariate-effect coefficients (one equation per topic){p_end}
+{synopt:{cmd:e(V)}}their covariance (block-diagonal by topic){p_end}
+{synopt:{cmd:e(gamma)}}prevalence coefficients (design x K-1){p_end}
+
+
+{marker postestimation}{...}
+{title:Postestimation}
+
+{pstd}{cmd:stmata} posts {cmd:e(b)}/{cmd:e(V)} (the method-of-composition effects,
+one equation per topic), so the usual tools apply:{p_end}
+{phang2}{cmd:. test [topic1]1.party}{p_end}
+{phang2}{cmd:. lincom [topic1]year - [topic2]year}{p_end}
+{phang2}{cmd:. margins party, predict(equation(topic1))}{p_end}
+{phang2}{cmd:. marginsplot}{p_end}
+
+{pstd}{cmd:predict} after {cmd:stmata} (one topic per call):{p_end}
+{synoptset 30 tabbed}{...}
+{synopt:{cmd:predict} {it:nv}{cmd:, xb topic(}{it:#}{cmd:)}}estimateEffect linear prediction{p_end}
+{synopt:{cmd:predict} {it:nv}{cmd:, stdp topic(}{it:#}{cmd:)}}its standard error{p_end}
+{synopt:{cmd:predict} {it:nv}{cmd:, pr topic(}{it:#}{cmd:)}}prevalence-fitted proportion, softmax(X*gamma){p_end}
 
 
 {title:Author}

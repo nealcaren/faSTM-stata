@@ -59,8 +59,9 @@ program stmata, eclass
 
     // estimateEffect outputs: e(b) row (1 x k*nprev), e(V) (k*nprev square).
     if `nprev' > 0 {
-        matrix stmata_eb = J(1, `k'*`nprev', .)
-        matrix stmata_eV = J(`k'*`nprev', `k'*`nprev', 0)
+        local pe = `k' * (`nprev' + 1)
+        matrix stmata_eb = J(1, `pe', .)
+        matrix stmata_eV = J(`pe', `pe', 0)
         matrix stmata_gamma = J(1 + `nprev', `k' - 1, .)
     }
 
@@ -73,6 +74,7 @@ program stmata, eclass
     if `nprev' > 0 {
         local bn ""
         forvalues t = 1/`k' {
+            local bn `bn' topic`t':_cons
             foreach nm of local collabels {
                 local bn `bn' topic`t':`nm'
             }
@@ -141,50 +143,50 @@ end
 //   xb           : prevalence linear predictor for the topic (reference topic = 0)
 program stmata_predict
     version 15.0
-    syntax newvarname [if] [in] , [ PRoportions XB Topic(integer 0) ]
+    syntax newvarname [if] [in] , [ PR XB STDP Topic(integer 0) EQuation(passthru) ]
 
     if "`e(cmd)'" != "stmata" {
         di as error "stmata estimation results not found"
         exit 301
     }
-    if "`e(prevalence)'" == "" {
-        di as error "predict after stmata requires a model fit with prevalence()"
-        exit 459
-    }
-    local kk = e(k)
-    if `topic' < 1 | `topic' > `kk' {
-        di as error "topic() must be an integer in 1..`kk'"
-        exit 198
-    }
-    local stat proportions
-    if "`xb'" != "" {
-        if "`proportions'" != "" {
-            di as error "specify only one of pr or xb"
-            exit 198
-        }
-        local stat xb
-    }
-
     marksample touse, novarlist
 
-    // Rebuild the design columns in gamma's row order: kept (non-base/omitted)
-    // prevalence terms; the intercept is added inside Mata.
-    fvexpand `e(prevalence)'
-    local expnames `r(varlist)'
-    fvrevar `e(prevalence)'
-    local revars `r(varlist)'
-    local prevvars ""
-    local i 0
-    foreach nm of local expnames {
-        local ++i
-        local tv : word `i' of `revars'
-        if !strmatch("`nm'", "*b.*") & !strmatch("`nm'", "*o.*") local prevvars `prevvars' `tv'
+    // pr: the model's prevalence-fitted proportion, softmax([X*gamma, 0]).
+    if "`pr'" != "" {
+        if "`e(prevalence)'" == "" {
+            di as error "pr requires a model fit with prevalence()"
+            exit 459
+        }
+        local kk = e(k)
+        if `topic' < 1 | `topic' > `kk' {
+            di as error "pr requires topic(#) in 1..`kk'"
+            exit 198
+        }
+        fvexpand `e(prevalence)'
+        local expnames `r(varlist)'
+        fvrevar `e(prevalence)'
+        local revars `r(varlist)'
+        local prevvars ""
+        local i 0
+        foreach nm of local expnames {
+            local ++i
+            local tv : word `i' of `revars'
+            if !strmatch("`nm'", "*b.*") & !strmatch("`nm'", "*o.*") local prevvars `prevvars' `tv'
+        }
+        tempname G
+        matrix `G' = e(gamma)
+        quietly generate double `varlist' = .
+        mata: stmata_pred("`varlist'", "`touse'", "`prevvars'", "`G'", `topic', `kk', "proportions")
+        exit
     }
 
-    tempname G
-    matrix `G' = e(gamma)
-    quietly generate double `varlist' = .
-    mata: stmata_pred("`varlist'", "`touse'", "`prevvars'", "`G'", `topic', `kk', "`stat'")
+    // xb / stdp: the estimateEffect linear prediction for one topic equation,
+    // via the native engine (margins-compatible, delta-method SEs).
+    if `"`equation'"' == "" {
+        if `topic' > 0 local equation equation(topic`topic')
+        else local equation equation(topic1)
+    }
+    _predict `typlist' `varlist' if `touse', `xb' `stdp' `equation'
 end
 
 mata:
