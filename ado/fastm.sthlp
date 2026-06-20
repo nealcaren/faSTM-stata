@@ -44,6 +44,8 @@ default {cmd:maxdocpct(100)}{p_end}
 {syntab:Output}
 {synopt:{opt gen:erate(name)}}stub for the topic-proportion variables; default
 {cmd:generate(theta)}{p_end}
+{synopt:{opt sav:ing(file[, replace])}}save topic-word probabilities + vocabulary
+to a dataset (one row per term: {cmd:word topic1 ... topicK}){p_end}
 {synopt:{opt replace}}overwrite existing topic-proportion variables{p_end}
 {synoptline}
 

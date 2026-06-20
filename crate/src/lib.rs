@@ -9,7 +9,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_int};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::path::Path;
 use topica_core::corpus::{from_texts, load_stoplist, LoadOptions};
@@ -119,6 +119,7 @@ pub extern "C" fn fastm_entry(argc: c_int, argv: *const *const c_char) -> c_int 
         let a = args(argc, argv);
         match a.first().map(String::as_str) {
             Some("fit") => fit_op(&a),
+            Some("searchk") => searchk_op(&a),
             _ => hello_op(),
         }
     })) {
@@ -378,6 +379,169 @@ fn fit_op(a: &[String]) -> c_int {
     say(&format!(
         "fastm: done. bound={:.2}, iters={}, mean coherence={:.2}, mean exclusivity={:.2}\n",
         model.bound, model.em_iters_run, mean_coh, mean_excl
+    ));
+    0
+}
+
+/// searchk: fit at one K with held-out document completion, report diagnostics.
+/// Varlist: text (1) then nprev prevalence vars (2..1+nprev); no theta vars.
+/// Args: `searchk <K> <seed> <iters> <nprev> <heldoutpct> <mindf> <maxdpct> <lower>`.
+/// Saves scalars fastm_sk_heldout / _bound / _coh / _excl for the ado to collect.
+fn searchk_op(a: &[String]) -> c_int {
+    let k: usize = a.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let seed: u64 = a.get(2).and_then(|s| s.parse().ok()).unwrap_or(42);
+    let em_iters: usize = a.get(3).and_then(|s| s.parse().ok()).unwrap_or(100);
+    let nprev: usize = a.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let heldout: f64 = a
+        .get(5)
+        .and_then(|s| s.parse::<f64>().ok())
+        .map(|x| x / 100.0)
+        .unwrap_or(0.5)
+        .clamp(0.05, 0.95);
+    let mindf: u32 = a.get(6).and_then(|s| s.parse().ok()).unwrap_or(1);
+    let maxdpct: f64 = a.get(7).and_then(|s| s.parse().ok()).unwrap_or(100.0);
+    let lower: bool = a.get(8).and_then(|s| s.parse::<i32>().ok()).unwrap_or(1) != 0;
+    if k < 2 {
+        err("fastm: k must be >= 2\n");
+        return 198;
+    }
+
+    let nvars = unsafe { rs_nvars() } as usize;
+    if nvars < 1 + nprev {
+        err("fastm: searchk varlist needs the text var + prevalence vars\n");
+        return 198;
+    }
+
+    let (i1, i2) = unsafe { (rs_in1(), rs_in2()) };
+    let mut texts: Vec<String> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    let mut obs_of_offset: Vec<c_int> = Vec::new();
+    let mut off = 0usize;
+    for obs in i1..=i2 {
+        if unsafe { rs_ifobs(obs) } == 0 {
+            continue;
+        }
+        texts.push(read_string(1, obs));
+        names.push(off.to_string());
+        obs_of_offset.push(obs);
+        off += 1;
+    }
+
+    let mut opts = LoadOptions {
+        min_doc_freq: mindf,
+        max_doc_fraction: (maxdpct / 100.0).clamp(0.0, 1.0),
+        lowercase: lower,
+        ..Default::default()
+    };
+    let stopfile = macro_use("fastm_stopfile");
+    if !stopfile.is_empty() {
+        if let Ok(sw) = load_stoplist(Path::new(&stopfile)) {
+            opts.stopwords = sw;
+        }
+    }
+    let corpus = match from_texts(&texts, Some(&names), None, &opts) {
+        Ok(c) => c,
+        Err(e) => {
+            err(&format!("fastm: tokenize error: {}\n", e));
+            return 198;
+        }
+    };
+    let v = corpus.num_types();
+    if corpus.num_docs() < 2 || v < 2 {
+        err("fastm: too few documents/terms after tokenization\n");
+        return 198;
+    }
+
+    // Hold out a fraction of each document's tokens (deterministic by seed).
+    let mut split_rng = ChaCha8Rng::seed_from_u64(seed ^ 0x5EED_5EED_5EED_5EED);
+    let mut train_docs: Vec<Vec<u32>> = Vec::new();
+    let mut test_docs: Vec<Vec<u32>> = Vec::new();
+    let mut keep_off: Vec<usize> = Vec::new();
+    for (di, doc) in corpus.docs.iter().enumerate() {
+        let mut tr = Vec::new();
+        let mut te = Vec::new();
+        for &w in doc {
+            if split_rng.gen::<f64>() < heldout {
+                te.push(w);
+            } else {
+                tr.push(w);
+            }
+        }
+        if !tr.is_empty() {
+            train_docs.push(tr);
+            test_docs.push(te);
+            keep_off.push(corpus.doc_names[di].parse().unwrap_or(usize::MAX));
+        }
+    }
+    let dd = train_docs.len();
+    if dd < 2 {
+        err("fastm: too few documents after the held-out split\n");
+        return 198;
+    }
+
+    // Prevalence design aligned to kept docs (prevalence vars start at index 2).
+    let prevalence: Option<Vec<Vec<f64>>> = if nprev > 0 {
+        let mut x = Vec::with_capacity(dd);
+        for &o in &keep_off {
+            let obs = obs_of_offset.get(o).copied().unwrap_or(i1);
+            let mut row = Vec::with_capacity(1 + nprev);
+            row.push(1.0);
+            for p in 0..nprev {
+                let mut val: c_double = 0.0;
+                unsafe { rs_vdata((2 + p) as c_int, obs, &mut val) };
+                row.push(val);
+            }
+            x.push(row);
+        }
+        Some(x)
+    } else {
+        None
+    };
+
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let model = fit_ctm(
+        &train_docs,
+        k,
+        v,
+        em_iters,
+        1e-5,
+        0.0,
+        prevalence.as_deref(),
+        None,
+        true,
+        None,
+        GammaPrior::Pooled,
+        false,
+        false,
+        &mut rng,
+    );
+    let theta = model.doc_topics();
+
+    // Document-completion held-out log-likelihood, per held-out token.
+    let mut sum_lp = 0.0f64;
+    let mut n_test = 0u64;
+    for i in 0..dd {
+        for &w in &test_docs[i] {
+            let mut p = 0.0f64;
+            for t in 0..k {
+                p += theta[i][t] * model.beta[t][w as usize];
+            }
+            sum_lp += p.max(1e-300).ln();
+            n_test += 1;
+        }
+    }
+    let heldout_ll = if n_test > 0 { sum_lp / n_test as f64 } else { 0.0 };
+
+    let mm = 10usize.min(v);
+    let coh = inspect::semantic_coherence(&model.beta, &train_docs, mm);
+    let excl = inspect::exclusivity(&model.beta, mm, 0.7);
+    save_scalar("fastm_sk_heldout", heldout_ll);
+    save_scalar("fastm_sk_bound", model.bound);
+    save_scalar("fastm_sk_coh", coh.iter().sum::<f64>() / k as f64);
+    save_scalar("fastm_sk_excl", excl.iter().sum::<f64>() / k as f64);
+    say(&format!(
+        "fastm: searchk K={} done (held-out LL={:.4}, {} test tokens)\n",
+        k, heldout_ll, n_test
     ));
     0
 }
