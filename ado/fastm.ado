@@ -14,7 +14,7 @@ program fastm, eclass
     }
 
     syntax varname [if] [in], K(integer) ///
-        [ PREValence(varlist fv ts) ///
+        [ PREValence(varlist fv ts) SPline(string) ///
           noLOWercase STOPwords(string) MINdocfreq(integer 1) MAXdocpct(real 100) STEM ///
           HELDout(real 0) NSTART(integer 1) ///
           SEED(integer 42) ITERs(integer 200) GENerate(name) SAVing(string) replace ]
@@ -85,6 +85,45 @@ program fastm, eclass
             }
         }
         markout `touse' `prevvars'
+    }
+
+    // spline(varlist [, df(#) degree(#)]): B-spline basis of a continuous
+    // covariate (stm's s()). For each variable, df basis columns are added to
+    // the prevalence design. Matches stm's design space (same quantile knots).
+    if `"`spline'"' != "" {
+        gettoken svars sopts : spline, parse(",")
+        local svars = trim(`"`svars'"')
+        local sdf 10
+        local sdeg 3
+        if `"`sopts'"' != "" {
+            // Re-running syntax clobbers the standard locals (varlist/if/in), so
+            // stash and restore the text variable around the suboption parse.
+            local _txtvar `varlist'
+            local 0 `"`sopts'"'
+            syntax [, DF(integer 10) DEGree(integer 3)]
+            local sdf `df'
+            local sdeg `degree'
+            local varlist `_txtvar'
+        }
+        if `sdf' < `sdeg' + 1 {
+            di as error "spline(): df must be at least degree+1 (`=`sdeg'+1')"
+            exit 198
+        }
+        foreach sv of local svars {
+            confirm numeric variable `sv'
+        }
+        markout `touse' `svars'
+        foreach sv of local svars {
+            local sbv ""
+            forvalues j = 1/`sdf' {
+                tempvar bs`sv'`j'
+                quietly generate double `bs`sv'`j'' = .
+                local sbv `sbv' `bs`sv'`j''
+                local prevvars  `prevvars'  `bs`sv'`j''
+                local collabels `collabels' `sv'_s`j'
+            }
+            mata: fastm_bs("`sv'", "`touse'", "`sbv'", `sdf', `sdeg')
+        }
     }
     local nprev : word count `prevvars'
 
@@ -354,6 +393,72 @@ void fastm_pred(string scalar newvar, string scalar touse, string scalar prevvar
     }
     st_view(yv = ., ., newvar, touse)
     yv[., .] = out
+}
+
+// R type-7 quantile of a sorted column vector at probability p.
+real scalar fastm_q7(real colvector xs, real scalar p)
+{
+    real scalar n, h, lo
+    n = rows(xs)
+    h = (n - 1) * p + 1
+    lo = floor(h)
+    if (lo >= n) return(xs[n])
+    return(xs[lo] + (h - lo) * (xs[lo + 1] - xs[lo]))
+}
+
+// i-th B-spline of order ord (degree ord-1) at t, Cox-de Boor recursion.
+// Right-closed at the upper boundary so x==hi is included (as in R's bs()).
+real scalar fastm_bbasis(real scalar i, real scalar ord, real scalar t,
+                         real colvector knots, real scalar hi)
+{
+    real scalar a, b, d1, d2
+    if (ord == 1) {
+        if (knots[i] <= t & t < knots[i + 1]) return(1)
+        if (t == hi & knots[i + 1] == hi & knots[i] < knots[i + 1]) return(1)
+        return(0)
+    }
+    a = 0; b = 0
+    d1 = knots[i + ord - 1] - knots[i]
+    if (d1 > 0) a = (t - knots[i]) / d1 * fastm_bbasis(i, ord - 1, t, knots, hi)
+    d2 = knots[i + ord] - knots[i + 1]
+    if (d2 > 0) b = (knots[i + ord] - t) / d2 * fastm_bbasis(i + 1, ord - 1, t, knots, hi)
+    return(a + b)
+}
+
+// B-spline basis matching R splines::bs(x, df, degree, intercept=FALSE):
+// quantile interior knots, min/max boundary knots, drop the first column.
+// Writes the df basis columns into the tempvars listed in tvars over touse.
+void fastm_bs(string scalar xvar, string scalar touse, string scalar tvars,
+              real scalar df, real scalar degree)
+{
+    real colvector x, xs, iknots, knots, yv
+    real matrix B, Bout
+    string rowvector tv
+    real scalar ord, nik, lo, hi, n, i, j, nb
+
+    st_view(x = ., ., xvar, touse)
+    n = rows(x)
+    ord = degree + 1
+    nik = df - ord + 1                         // interior knots (intercept=FALSE)
+    xs = sort(x, 1)
+    lo = xs[1]; hi = xs[n]
+    iknots = J(0, 1, .)
+    if (nik > 0) {
+        iknots = J(nik, 1, .)
+        for (i = 1; i <= nik; i++) iknots[i] = fastm_q7(xs, i / (nik + 1))
+    }
+    knots = J(ord, 1, lo) \ iknots \ J(ord, 1, hi)
+    nb = rows(knots) - ord                     // number of basis functions
+    B = J(n, nb, 0)
+    for (i = 1; i <= n; i++) {
+        for (j = 1; j <= nb; j++) B[i, j] = fastm_bbasis(j, ord, x[i], knots, hi)
+    }
+    Bout = B[, (2 :: nb)]                       // drop first column (intercept=FALSE)
+    tv = tokens(tvars)
+    for (j = 1; j <= cols(Bout); j++) {
+        st_view(yv = ., ., tv[j], touse)
+        yv[., .] = Bout[, j]
+    }
 }
 end
 

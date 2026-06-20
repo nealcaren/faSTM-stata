@@ -28,6 +28,8 @@ where {varname} is a string variable holding one document per observation.
 {synopt:{opt k(#)}}number of topics ({cmd:k}>=2); required{p_end}
 {synopt:{opt preval:ence(varlist)}}prevalence covariates; factor variables
 ({cmd:i.}, {cmd:c.}, {cmd:##}) allowed{p_end}
+{synopt:{opt sp:line(varlist[, df(#) degree(#)])}}B-spline basis of continuous
+covariate(s) in prevalence (stm's {cmd:s()}); default {cmd:df(10) degree(3)}{p_end}
 {synopt:{opt iter:s(#)}}maximum EM iterations; default {cmd:iters(200)}{p_end}
 {synopt:{opt seed(#)}}random seed (used for random init and the effect draws);
 default {cmd:seed(42)}{p_end}
@@ -86,6 +88,13 @@ Typing {cmd:fastm} without arguments redisplays the last fit.
 {phang}{opt prevalence(varlist)} lists prevalence covariates. Factor-variable and
 time-series operators are allowed (e.g. {cmd:i.party c.year i.party##c.year}); the
 design is expanded with base/omitted levels dropped, and an intercept is added.
+
+{phang}{opt spline(varlist[, df(#) degree(#)])} adds a B-spline basis of each
+continuous covariate to the prevalence design, the way R {cmd:stm}'s {cmd:s()}
+does. Defaults match {cmd:stm}: {cmd:df(10)}, {cmd:degree(3)}, with interior knots
+at sample quantiles. The basis columns ({it:var}{cmd:_s1}, {it:var}{cmd:_s2}, ...)
+enter {cmd:e(b)} like any other prevalence term, so {cmd:test} and {cmd:lincom}
+work on them. Combine with {opt prevalence()} for mixed designs.
 
 {phang}{opt iters(#)} caps the EM iterations (default 200); the fit stops earlier
 on convergence.
