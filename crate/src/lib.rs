@@ -25,6 +25,7 @@ extern "C" {
     fn rs_vdata(var: c_int, obs: c_int, d: *mut c_double) -> c_int;
     fn rs_vstore(var: c_int, obs: c_int, v: c_double) -> c_int;
     fn rs_is_missing(v: c_double) -> c_int;
+    fn rs_ifobs(obs: c_int) -> c_int;
     fn rs_scal_save(name: *const c_char, v: c_double) -> c_int;
     fn rs_sdatalen(var: c_int, obs: c_int) -> c_int;
     fn rs_var_is_strl(var: c_int) -> c_int;
@@ -127,10 +128,15 @@ fn fit_op(a: &[String]) -> c_int {
     let (i1, i2) = unsafe { (rs_in1(), rs_in2()) };
     let mut texts: Vec<String> = Vec::new();
     let mut names: Vec<String> = Vec::new();
+    let mut obs_of_offset: Vec<c_int> = Vec::new(); // offset -> Stata obs (honoring if/in)
     let mut off = 0usize;
     for obs in i1..=i2 {
+        if unsafe { rs_ifobs(obs) } == 0 {
+            continue;
+        }
         texts.push(read_string(1, obs));
-        names.push(off.to_string()); // 0-based offset within the sample
+        names.push(off.to_string()); // 0-based offset within the selected sample
+        obs_of_offset.push(obs);
         off += 1;
     }
 
@@ -175,13 +181,16 @@ fn fit_op(a: &[String]) -> c_int {
     );
     let theta = model.doc_topics(); // d x k
 
-    // Write theta back: surviving corpus doc -> original obs via doc_names.
+    // Write theta back: surviving corpus doc -> original obs via doc_names offset.
     for (di, name) in corpus.doc_names.iter().enumerate() {
         let off: usize = match name.parse() {
             Ok(x) => x,
             Err(_) => continue,
         };
-        let obs = i1 + off as c_int;
+        if off >= obs_of_offset.len() {
+            continue;
+        }
+        let obs = obs_of_offset[off];
         for t in 0..k {
             unsafe { rs_vstore((2 + t) as c_int, obs, theta[di][t]) };
         }

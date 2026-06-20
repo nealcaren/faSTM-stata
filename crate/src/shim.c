@@ -33,6 +33,7 @@ ST_int     rs_in2(void)                               { return SF_in2(); }
 ST_retcode rs_vdata(ST_int var, ST_int obs, ST_double *d) { return SF_vdata(var, obs, d); }
 ST_retcode rs_vstore(ST_int var, ST_int obs, ST_double v) { return SF_vstore(var, obs, v); }
 ST_int     rs_is_missing(ST_double v)                 { return SF_is_missing(v); }
+ST_int     rs_ifobs(ST_int obs)                       { return SF_ifobs(obs); }
 ST_retcode rs_scal_save(char *s, ST_double d)         { return SF_scal_save(s, d); }
 
 /* string reads (var, obs), 1-based */
