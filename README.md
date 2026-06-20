@@ -55,7 +55,10 @@ machinery works:
   `maxdocpct()`, `nolowercase`: transparent vocabulary formation (stm's
   `prepDocuments`).
 - **Prevalence covariates** with full factor-variable syntax: `i.party`,
-  `c.year`, interactions `i.party##c.year`.
+  `c.year`, interactions `i.party##c.year`, and smooth `spline()` terms (stm's
+  `s()`).
+- **Content covariates** (`content()`): the SAGE content model, shifting
+  topic-word distributions across groups.
 - **Labels and diagnostics**: FREX / probability / lift / score, semantic
   coherence, exclusivity (stm-faithful, computed in the engine).
 - **estimateEffect**: covariate effects on topic proportions, posted as
@@ -128,16 +131,15 @@ docs/         design notes + the Stata Journal readiness plan
 
 ## Status and roadmap
 
-Done: fitting, preprocessing controls, prevalence with factor variables,
-labels/diagnostics, estimateEffect with `e(b)`/`e(V)` (test/lincom/margins),
-`predict`, `searchk`, `saving()`, replay, help files, and real-corpus parity vs
-R `stm` on poliblog.
+Done: fitting, preprocessing controls, prevalence with factor variables and
+smooth `spline()` terms, content (SAGE) covariates, labels/diagnostics,
+estimateEffect with `e(b)`/`e(V)` (test/lincom/margins), `predict`, `searchk`,
+`estat thoughts`/`estat labels`, `e(topiccorr)`, `heldout()`, `nstart()`,
+`saving()`, replay, help files, and real-corpus parity vs R `stm` on poliblog
+(prevalence, `s(day)`, and content models all match to <0.001%).
 
 Next (see [docs/STATA_JOURNAL_READINESS.md](docs/STATA_JOURNAL_READINESS.md)):
 
-- `estat thoughts` (representative documents), `e(sigma)` topic correlations,
-  standalone held-out likelihood, `nstart()` multi-start.
-- **Content / SAGE covariates** (`content()`): the other half of STM.
 - **Packaging**: ship prebuilt macOS + Linux (and Windows) plugins, `net install`
   / SSC.
 - A Stata Journal article introducing the command.
