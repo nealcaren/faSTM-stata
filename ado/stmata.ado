@@ -1,7 +1,18 @@
-*! stmata 0.3.0  Structural Topic Models in Stata (engine: topica-core, Rust)
+*! stmata 0.4.0  Structural Topic Models in Stata (engine: topica-core, Rust)
 *! stmata textvar [if] [in], k(#) [prevalence(fvvarlist) seed(#) iters(#) generate(name) replace]
 program stmata, eclass
     version 15.0
+
+    // Replay: bare `stmata` redisplays the last fit.
+    if replay() {
+        if "`e(cmd)'" != "stmata" {
+            di as error "last estimates not found"
+            exit 301
+        }
+        stmata_display
+        exit
+    }
+
     syntax varname [if] [in], K(integer) ///
         [ PREValence(varlist fv ts) SEED(integer 42) ITERs(integer 200) ///
           GENerate(name) replace ]
@@ -68,6 +79,7 @@ program stmata, eclass
     ereturn scalar coherence    = scalar(stmata_coh)
     ereturn scalar exclusivity  = scalar(stmata_excl)
     ereturn scalar n_prevalence = `nprev'
+    ereturn local prev_terms "`collabels'"
     ereturn local prevalence "`prevalence'"
     ereturn local generate   "`generate'"
     ereturn local textvar    "`varlist'"
@@ -86,33 +98,39 @@ program stmata, eclass
         ereturn matrix effects    = stmata_b
     }
 
+    stmata_display
+end
+
+// Display the stored results (used by estimation and by replay). Reads e() only.
+program stmata_display
     di ""
     di as txt "Structural Topic Model" ///
         _col(48) "Documents      = " as res %9.0fc e(N_docs)
     di as txt "Engine: topica-core (Rust)" ///
         _col(48) "Vocabulary     = " as res %9.0fc e(n_terms)
     di as txt _col(48) "Topics (K)     = " as res %9.0fc e(k)
-    if `nprev' > 0 ///
+    if e(n_prevalence) > 0 ///
         di as txt _col(48) "Prevalence     = " as res %9.0fc e(n_prevalence) as txt " term(s)"
     di as txt _col(48) "Final bound    = " as res %9.2f e(bound)
     di as txt "Mean semantic coherence  = " as res %9.2f e(coherence) ///
         _col(48) "Mean exclusivity = " as res %9.2f e(exclusivity)
-    di as txt "Topic proportions written to " as res "`generate'1-`generate'`k'" ///
+    di as txt "Topic proportions in " as res "`e(generate)'1-`e(generate)'`=e(k)'" ///
         as txt " (EM iters " as res %9.0f e(iters) as txt ")"
 
-    if `nprev' > 0 {
+    if e(n_prevalence) > 0 {
         di ""
         di as txt "Covariate effects on topic proportions (method of composition)"
         tempname B SE
         matrix `B'  = e(effects)
         matrix `SE' = e(effects_se)
+        local terms `e(prev_terms)'
         local ci = 0
-        foreach nm of local collabels {
+        foreach nm of local terms {
             local ++ci
             di as txt "Term " as res "`nm'" as txt ":"
             di as txt "    topic {c |}       coef         se"
             di as txt "    {hline 6}{c +}{hline 24}"
-            forvalues t = 1/`k' {
+            forvalues t = 1/`=e(k)' {
                 di as txt "    " %5.0f `t' " {c |} " ///
                     as res %10.4f `B'[`t',`ci'] "  " %10.4f `SE'[`t',`ci']
             }
