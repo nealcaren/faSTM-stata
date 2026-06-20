@@ -96,9 +96,10 @@ exclusivity to floating point). The engine is already cross-validated against R
 
 ## Milestones
 
-- **M0 — toolchain/FFI smoke test (this commit).** `stmata.plugin` loads in Stata
-  15; reads a variable, writes a variable, saves a scalar. Proves the build +
-  shim + arch end to end. No modeling.
+- **M0 — toolchain/FFI smoke test. DONE, validated in Stata 15.1.** `stmata.plugin`
+  loads; reads a variable, writes `2*x` into a second, saves a scalar that matches
+  `summarize` to the digit. Proves the build + shim + arch end to end. (Gotcha
+  banked: `SF_vdata`/`SF_vstore` are `(variable, observation)`, both 1-based.)
 - **M1 — fit round-trip.** Stata text variable -> plugin -> `topica_core` fit ->
   β and θ back into Stata. Needs `from_texts` in core.
 - **M2 — post-fit in core + Mata wrappers.** FREX/lift/score, coherence,

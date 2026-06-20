@@ -63,9 +63,10 @@ fn run(_argc: c_int, _argv: *const *const c_char) -> c_int {
     let (i1, i2) = unsafe { (rs_in1(), rs_in2()) };
     let mut sum = 0.0_f64;
     let mut n = 0_i64;
-    for i in i1..=i2 {
+    for obs in i1..=i2 {
+        // SF_vdata/SF_vstore take (variable_index, observation), both 1-based.
         let mut v: c_double = 0.0;
-        let rc = unsafe { rs_vdata(i, 1, &mut v as *mut c_double) };
+        let rc = unsafe { rs_vdata(1, obs, &mut v as *mut c_double) };
         if rc != 0 {
             return rc;
         }
@@ -76,9 +77,9 @@ fn run(_argc: c_int, _argv: *const *const c_char) -> c_int {
         n += 1;
         // If a second variable is supplied, write 2*input into it (write round-trip).
         if nvars >= 2 {
-            let rc = unsafe { rs_vstore(i, 2, v * 2.0) };
-            if rc != 0 {
-                return rc;
+            let wrc = unsafe { rs_vstore(2, obs, v * 2.0) };
+            if wrc != 0 {
+                return wrc;
             }
         }
     }

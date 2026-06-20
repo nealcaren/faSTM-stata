@@ -29,7 +29,8 @@ ST_int     rs_nobs(void)                              { return SF_nobs(); }
 ST_int     rs_nvars(void)                             { return SF_nvars(); }
 ST_int     rs_in1(void)                               { return SF_in1(); }
 ST_int     rs_in2(void)                               { return SF_in2(); }
-ST_retcode rs_vdata(ST_int i, ST_int j, ST_double *d) { return SF_vdata(i, j, d); }
-ST_retcode rs_vstore(ST_int i, ST_int j, ST_double v) { return SF_vstore(i, j, v); }
+/* NB: Stata's order is (variable_index, observation), both 1-based. */
+ST_retcode rs_vdata(ST_int var, ST_int obs, ST_double *d) { return SF_vdata(var, obs, d); }
+ST_retcode rs_vstore(ST_int var, ST_int obs, ST_double v) { return SF_vstore(var, obs, v); }
 ST_int     rs_is_missing(ST_double v)                 { return SF_is_missing(v); }
 ST_retcode rs_scal_save(char *s, ST_double d)         { return SF_scal_save(s, d); }

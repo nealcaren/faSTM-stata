@@ -5,7 +5,8 @@ Structural Topic Models in **Stata**, backed by the same Rust engine
 no Rust toolchain required to *use* it: you install an ado/Mata package plus a
 precompiled `stmata.plugin`.
 
-> Status: **M0 — toolchain spike.** Not usable yet. See [DESIGN.md](DESIGN.md).
+> Status: **M0 done** — toolchain/FFI validated in Stata 15.1 (the plugin loads,
+> reads/writes variables, returns a scalar). Not yet a model. See [DESIGN.md](DESIGN.md).
 
 ## Layout
 
