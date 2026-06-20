@@ -17,5 +17,8 @@ crate-type = ["staticlib"]
 # catch_unwind useless (and take Stata down with it).
 
 [dependencies]
-# topica_core lands at M1 (the actual fit). M0 (hello-world) needs nothing.
-# topica_core = { path = "../../topica/topica-core" }
+# DEV: local path to the engine. Switch to a git tag pin for distribution,
+# the way faSTM does. default-features = false keeps serde out (vendorable).
+topica-core = { path = "../../topica/topica-core", default-features = false }
+rand = "0.8"
+rand_chacha = "0.3"   # ChaCha8Rng, same stream as topica-core

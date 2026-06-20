@@ -100,8 +100,12 @@ exclusivity to floating point). The engine is already cross-validated against R
   loads; reads a variable, writes `2*x` into a second, saves a scalar that matches
   `summarize` to the digit. Proves the build + shim + arch end to end. (Gotcha
   banked: `SF_vdata`/`SF_vstore` are `(variable, observation)`, both 1-based.)
-- **M1 — fit round-trip.** Stata text variable -> plugin -> `topica_core` fit ->
-  β and θ back into Stata. Needs `from_texts` in core.
+- **M1 — fit round-trip. DONE, validated in Stata 15.1.** `plugin call stmata
+  <text> <theta1..thetaK>, fit <K> <seed> <iters>` reads the text variable, builds
+  a corpus via `topica_core::from_texts`, fits with `fit_ctm` (spectral init, no
+  covariates yet), writes θ back per observation, prints top words per topic, and
+  saves `stmata_K/V/D/bound/iters`. Two-theme demo (`examples/fit_demo.do`) splits
+  sports vs cooking cleanly (θ₁≈0.98 on sports docs).
 - **M2 — post-fit in core + Mata wrappers.** FREX/lift/score, coherence,
   exclusivity ported into `topica-core`; `stm`/`labeltopics`-style ado output.
 - **M3 — estimateEffect.** Port method-of-composition into core; native-feeling

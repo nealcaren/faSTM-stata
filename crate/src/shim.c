@@ -34,3 +34,9 @@ ST_retcode rs_vdata(ST_int var, ST_int obs, ST_double *d) { return SF_vdata(var,
 ST_retcode rs_vstore(ST_int var, ST_int obs, ST_double v) { return SF_vstore(var, obs, v); }
 ST_int     rs_is_missing(ST_double v)                 { return SF_is_missing(v); }
 ST_retcode rs_scal_save(char *s, ST_double d)         { return SF_scal_save(s, d); }
+
+/* string reads (var, obs), 1-based */
+ST_int     rs_sdatalen(ST_int var, ST_int obs)        { return SF_sdatalen(var, obs); }
+ST_int     rs_var_is_strl(ST_int var)                 { return SF_var_is_strl(var); }
+ST_retcode rs_sdata(ST_int var, ST_int obs, char *buf){ return SF_sdata(var, obs, buf); }
+ST_retcode rs_strldata(ST_int var, ST_int obs, char *buf, ST_int len) { return SF_strldata(var, obs, buf, len); }
