@@ -1,41 +1,127 @@
 # fastm
 
 Structural Topic Models in **Stata**, backed by the same Rust engine
-(`topica-core`) as [faSTM](https://github.com/nealcaren/faSTM) (R). No Python and
-no Rust toolchain required to *use* it: you install an ado/Mata package plus a
-precompiled `fastm.plugin`.
+(`topica-core`) as [faSTM](https://github.com/nealcaren/faSTM) (R) and
+[topica](https://github.com/nealcaren/topica) (Python). Fitting, tokenization,
+labels, diagnostics, and covariate-effect estimation all run in a compiled
+plugin, so **no Python and no Rust toolchain are needed to use it**: you install
+an ado/Mata package plus a precompiled `fastm.plugin`.
 
-> Status: **M1 done** — fits an STM end to end in Stata 15.1: reads a text
-> variable, fits via `topica-core`, writes topic proportions (θ) back, prints top
-> words per topic. No covariates yet. See [DESIGN.md](DESIGN.md).
+> Status: **working, pre-1.0.** A full estimation command, validated in Stata 15.1.
+> Not yet packaged for `net install` / SSC, and not yet parity-checked
+> against R `stm` on a real corpus (see the roadmap below).
+
+## What it does
+
+```stata
+. fastm abstract, k(20) prevalence(i.party c.year i.party##c.year)
+
+Structural Topic Model                  Documents      =     1,247
+Engine: topica-core (Rust)              Vocabulary     =     3,201
+                                        Topics (K)     =        20
+                                        Prevalence     =         5 term(s)
+                                        Final bound    = -1234567.8
+Mean semantic coherence  =    -71.40    Mean exclusivity =      9.12
+Topic proportions in theta1-theta20 (EM iters 38)
+
+Covariate effects on topic proportions (method of composition)
+[ multi-equation coefficient table, one equation per topic ]
+```
+
+`fastm` fits the model, writes each document's topic proportions to
+`theta1 .. thetaK`, prints FREX labels and coherence/exclusivity per topic, and
+(with `prevalence()`) estimates covariate effects on topic prevalence by the
+method of composition, with standard errors that propagate the per-document
+topic-estimation uncertainty.
+
+Because it posts `e(b)` / `e(V)` (one equation per topic), the usual Stata
+machinery works:
+
+```stata
+. test [topic5]1.party
+. lincom [topic5]year - [topic8]year
+. margins party, predict(equation(topic5))
+. marginsplot
+. predict tp5, pr topic(5)        // prevalence-fitted proportion
+. fastm                            // redisplay the last fit
+. help fastm
+```
+
+## Features
+
+- **Fit** an STM from a Stata string variable (one document per observation);
+  honors `if`/`in`.
+- **Prevalence covariates** with full factor-variable syntax: `i.party`,
+  `c.year`, interactions `i.party##c.year`.
+- **Labels and diagnostics**: FREX / probability / lift / score, semantic
+  coherence, exclusivity (stm-faithful, computed in the engine).
+- **estimateEffect**: covariate effects on topic proportions, posted as
+  `e(b)` / `e(V)`, so `test`, `lincom`, `margins`, and `marginsplot` all work.
+- **predict** (xtreg-style): `pr` (model prevalence-fitted proportion), `xb`,
+  `stdp`, with `topic(#)`.
+- **Replay** (bare `fastm`) and a full **help file**.
+
+## Build
+
+The Rust core compiles into a Stata plugin. To build it yourself you need a Rust
+toolchain (end users will not, once binaries are shipped):
+
+```sh
+bash build/build.sh          # -> ./fastm.plugin  (x86_64: Stata 15 is x86_64)
+```
+
+Then, from the repo root in Stata:
+
+```stata
+. run "ado/fastm.ado"
+. do examples/margins_demo.do
+```
+
+`build.sh` targets `x86_64` on both macOS (a `-bundle`) and Linux
+(`-shared`), since Stata 15 is an x86_64 binary even on Apple Silicon.
+
+## How it fits together
+
+```
+  Stata (ado + Mata)                 <- syntax, factor vars, margins, output
+        |  plugin call  (the only C/FFI boundary)
+  fastm.plugin   = shim.c + vendor/stplugin.c + Rust   <- marshals Stata <-> Rust
+        |  plain Rust calls (no FFI)
+  topica-core (Rust)                 <- fit + labels + coherence + estimateEffect
+```
+
+The plugin is itself Rust and depends on `topica-core` as an ordinary crate, so
+the only C boundary is Stata ↔ plugin. The engine pieces (`from_texts`,
+`inspect`, `effects`) live in `topica-core` and are shared with faSTM and topica.
+See [DESIGN.md](DESIGN.md) for the FFI decision and build details.
+
+## Why a plugin (not Python, not pure Mata)
+
+The constraint is no end-user Python or Rust. A pure-Mata reimplementation would
+be far slower than R `stm` (whose hot loop is compiled C++; Mata is interpreted
+and single-threaded). Shipping the validated Rust engine as a precompiled plugin
+keeps the speed and reuses one cross-validated codebase.
 
 ## Layout
 
 ```
 crate/        Rust plugin (lib.rs) + the C shim (shim.c) over StataCorp's interface
 vendor/       StataCorp's stplugin.c / stplugin.h, unmodified (see vendor/NOTICE.md)
-build/        build.sh — compiles + links fastm.plugin for x86_64 (macOS / Linux)
-ado/  mata/   Stata side (added from M2)
-examples/     hello.do — the M0 smoke test
-tests/parity/ parity checks vs R stm / faSTM (added from M1)
+build/        build.sh: compiles + links fastm.plugin for x86_64 (macOS / Linux)
+ado/          fastm.ado, fastm.sthlp (the command + help)
+examples/     *.do demos (fit, covariates, factor vars, margins)
 docs/         design + notes
 ```
 
-## Build + smoke test
+## Roadmap
 
-```sh
-bash build/build.sh          # -> ./fastm.plugin  (x86_64)
-# then, in Stata 15, from the repo root:
-#   do examples/hello.do
-```
+- **Content / SAGE covariates** (`content()`): the other half of STM.
+- **Real-corpus parity** vs R `stm` on poliblog (mirroring faSTM's validation).
+- **Packaging**: ship prebuilt macOS + Linux plugins, `net install` / SSC.
+- A Stata Journal article introducing the command.
 
-`hello.do` loads the plugin, reads `mpg`, writes `2*mpg` into a new variable, and
-saves a Stata scalar — proving the Stata<->Rust round-trip before any modeling.
+## Relation to faSTM and topica
 
-## Why a plugin (not Python, not pure Mata)
-
-The constraint is no end-user Python or Rust. A pure-Mata reimplementation would
-be far slower than R `stm` (its hot loop is compiled C++; Mata is interpreted and
-single-threaded). Shipping the validated Rust engine as a precompiled plugin keeps
-the speed and reuses one cross-validated codebase. See [DESIGN.md](DESIGN.md) for
-the full rationale and the FFI decision.
+The model and its post-fit math live once, in `topica-core` (Rust), and are
+consumed by faSTM (R), topica (Python), and `fastm` (Stata). The estimator is
+cross-validated against R `stm` through faSTM.
