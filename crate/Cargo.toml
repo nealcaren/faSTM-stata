@@ -1,0 +1,21 @@
+[package]
+name = "stmata"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Stata plugin for Structural Topic Models, backed by topica-core (Rust)."
+
+[lib]
+name = "stmata"
+# staticlib: build/build.sh links this .a together with the StataCorp shim
+# (shim.c + vendor/stplugin.c) into the final `stmata.plugin` shared object.
+crate-type = ["staticlib"]
+
+# NB: keep the default panic = "unwind". stmata_entry wraps its body in
+# catch_unwind and converts a panic into a Stata return code, so panics never
+# cross the extern "C" boundary into Stata. panic = "abort" would make
+# catch_unwind useless (and take Stata down with it).
+
+[dependencies]
+# topica_core lands at M1 (the actual fit). M0 (hello-world) needs nothing.
+# topica_core = { path = "../../topica/topica-core" }

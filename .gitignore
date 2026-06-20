@@ -1,0 +1,13 @@
+# Rust
+crate/target/
+
+# build artifacts
+build/*.o
+*.plugin
+
+# Stata
+*.smcl
+*.log
+
+# OS
+.DS_Store
