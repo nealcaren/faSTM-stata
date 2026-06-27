@@ -21,6 +21,6 @@ crate-type = ["staticlib"]
 # topica repo as a sibling. For local engine development, crate/.cargo/config.toml
 # (gitignored) overrides this with the local path. Pin to a tag/rev for releases.
 # default-features = false keeps serde out (vendorable).
-topica-core = { git = "https://github.com/nealcaren/topica", branch = "main", default-features = false }
+topica-core = { git = "https://github.com/nealcaren/topica", tag = "v0.32.0", default-features = false }
 rand = "0.8"
 rand_chacha = "0.3"   # ChaCha8Rng, same stream as topica-core

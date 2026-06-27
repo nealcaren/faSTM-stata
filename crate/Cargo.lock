@@ -200,7 +200,7 @@ dependencies = [
 [[package]]
 name = "topica-core"
 version = "0.1.0"
-source = "git+https://github.com/nealcaren/topica?branch=main#2df9960d07c5fc112ca8f21958bd0fc9b7a1287e"
+source = "git+https://github.com/nealcaren/topica?tag=v0.32.0#9fbe23a7afc5ccc4142218991e62e362cf1f401d"
 dependencies = [
  "rand",
  "rand_chacha",
