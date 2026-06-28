@@ -53,16 +53,33 @@ case "$UNAME" in
   Linux)
     SYS=2                                  # OPUNIX
     RTARGET="${RTARGET:-x86_64-unknown-linux-gnu}"
-    echo ">> Rust staticlib  ($RTARGET)"
-    ( cd "$CRATE"
-      rustup target add "$RTARGET" >/dev/null 2>&1 || true
-      cargo build --release --target "$RTARGET" )
-    ALIB="$CRATE/target/$RTARGET/release/libfastm.a"
+    if [ -n "${ZIG_GLIBC:-}" ]; then
+      # Portable build: pin the glibc version so the plugin loads on older
+      # systems (RHEL9 = glibc 2.34, RHEL8 = 2.28, etc.). cargo-zigbuild builds
+      # the Rust staticlib and `zig cc` compiles/links the shim against the same
+      # old glibc. A binary built on a newer glibc (e.g. ubuntu-latest, 2.39)
+      # will NOT load on older systems, hence this pin for CI.
+      GT="$RTARGET.$ZIG_GLIBC"
+      echo ">> Rust staticlib via cargo-zigbuild  ($GT)"
+      ( cd "$CRATE"
+        rustup target add "$RTARGET" >/dev/null 2>&1 || true
+        cargo zigbuild --release --target "$GT" )
+      ALIB="$CRATE/target/$GT/release/libfastm.a"
+      [ -f "$ALIB" ] || ALIB="$(find "$CRATE/target" -name libfastm.a -path '*release*' | head -1)"
+      CCMD=(zig cc -target "x86_64-linux-gnu.$ZIG_GLIBC")
+    else
+      echo ">> Rust staticlib  ($RTARGET)"
+      ( cd "$CRATE"
+        rustup target add "$RTARGET" >/dev/null 2>&1 || true
+        cargo build --release --target "$RTARGET" )
+      ALIB="$CRATE/target/$RTARGET/release/libfastm.a"
+      CCMD=(cc)
+    fi
     [ -f "$ALIB" ] || { echo "missing $ALIB" >&2; exit 1; }
-    echo ">> shim + link (SYSTEM=$SYS)"
-    cc -fPIC -DSYSTEM=$SYS -I"$VENDOR" -c "$VENDOR/stplugin.c" -o "$OBJ/stplugin.o"
-    cc -fPIC -DSYSTEM=$SYS -I"$VENDOR" -c "$CRATE/src/shim.c"   -o "$OBJ/shim.o"
-    cc -shared -o "$OUT" "$OBJ/shim.o" "$OBJ/stplugin.o" "$ALIB" -lm -ldl -lpthread
+    echo ">> shim + link (SYSTEM=$SYS) using ${CCMD[*]}"
+    "${CCMD[@]}" -fPIC -DSYSTEM=$SYS -I"$VENDOR" -c "$VENDOR/stplugin.c" -o "$OBJ/stplugin.o"
+    "${CCMD[@]}" -fPIC -DSYSTEM=$SYS -I"$VENDOR" -c "$CRATE/src/shim.c"   -o "$OBJ/shim.o"
+    "${CCMD[@]}" -shared -o "$OUT" "$OBJ/shim.o" "$OBJ/stplugin.o" "$ALIB" -lm -ldl -lpthread
     ;;
   *) echo "unsupported OS: $UNAME" >&2; exit 1 ;;
 esac
