@@ -13,17 +13,15 @@ build/*.plugin
 # OS
 .DS_Store
 
-# parity fixtures (regenerate via tests/parity/export_poliblog.R)
-tests/parity/*.dta
-
-# internal planning (not part of the public package)
-docs/
-
 # local cargo override for engine dev (not for distribution)
 crate/.cargo/
 
-# replication package log ships with the SJ submission
-!replication/*.log
-
-# Zotero reference library (local only; 41MB of source PDFs, not part of the package)
+# Work products kept local, out of the install-facing repo (paper, drafts,
+# article replication, R-stm parity fixtures, internal design/planning notes,
+# the submission bundle, and the Zotero reference library).
+docs/
+submission/
 zotero/
+DESIGN.md
+/replication/
+/tests/parity/

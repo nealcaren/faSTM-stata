@@ -130,7 +130,6 @@ still needs a smoke test on a Windows copy of Stata before release.
 The plugin is itself Rust and depends on `topica-core` as an ordinary crate, so
 the only C boundary is Stata ↔ plugin. The engine pieces (`from_texts`,
 `inspect`, `effects`) live in `topica-core` and are shared with faSTM and topica.
-See [DESIGN.md](DESIGN.md) for the FFI decision and build details.
 
 ## Why a plugin (not Python, not pure Mata)
 
@@ -142,13 +141,12 @@ keeps the speed and reuses one cross-validated codebase.
 ## Layout
 
 ```
+ado/          fastm.ado/.sthlp, searchk.ado/.sthlp, fastm_english.stops, plugins
 crate/        Rust plugin (lib.rs) + the C shim (shim.c) over StataCorp's interface
 vendor/       StataCorp's stplugin.c / stplugin.h, unmodified (see vendor/NOTICE.md)
-build/        build.sh: compiles + links fastm.plugin for x86_64 (macOS / Linux)
-ado/          fastm.ado/.sthlp, searchk.ado/.sthlp, fastm_english.stops
+build/        build.sh / build.ps1: compile + link fastm.plugin per OS
 examples/     *.do demos (fit, covariates, factor vars, margins)
-tests/parity/ real-corpus parity vs R stm/faSTM on poliblog
-docs/         design notes + the Stata Journal readiness plan
+tests/        win_smoke/: load the plugin and run a fit, no Stata (CI smoke test)
 ```
 
 ## Status and roadmap
@@ -160,7 +158,7 @@ estimateEffect with `e(b)`/`e(V)` (test/lincom/margins), `predict`, `searchk`,
 `saving()`, replay, help files, and real-corpus parity vs R `stm` on poliblog
 (prevalence, `s(day)`, and content models all match to <0.001%).
 
-Next (see [docs/STATA_JOURNAL_READINESS.md](docs/STATA_JOURNAL_READINESS.md)):
+Next:
 
 - **Packaging**: ship prebuilt macOS + Linux (and Windows) plugins, `net install`
   / SSC.
