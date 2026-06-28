@@ -1,11 +1,13 @@
 # fastm
 
-Structural Topic Models in **Stata**, backed by the same Rust engine
-(`topica-core`) as [faSTM](https://github.com/nealcaren/faSTM) (R) and
-[topica](https://github.com/nealcaren/topica) (Python). Fitting, tokenization,
-labels, diagnostics, and covariate-effect estimation all run in a compiled
-plugin, so **no Python and no Rust toolchain are needed to use it**: you install
-an ado/Mata package plus a precompiled `fastm.plugin`.
+`fastm` brings **structural topic models** (STM) to **Stata**. It is essentially a
+Stata port of the R package [**stm**](https://www.structuraltopicmodel.com/)
+(Roberts, Stewart, and Tingley 2019): it fits the same model — where document-level
+covariates shape both how prevalent a topic is and how its words are chosen — and
+reproduces stm's results to within 0.001% on the poliblog corpus. Fitting,
+tokenization, labels, diagnostics, and covariate-effect estimation all run in a
+compiled Rust plugin, so **no Python and no Rust toolchain are needed to use it**:
+you install an ado/Mata package plus a precompiled `fastm.plugin`.
 
 > Status: **working, pre-1.0.** A full estimation command, validated in Stata
 > 15.1 and parity-checked against R `stm` on poliblog. Not yet packaged for
@@ -94,8 +96,10 @@ place them on the adopath by hand.
 
 ## Build
 
-The Rust core compiles into a Stata plugin. To build it yourself you need a Rust
-toolchain (end users will not, once binaries are shipped):
+**Most users never need this.** `net install` ships precompiled plugins for macOS,
+Linux, and Windows, and `fastm.ado` loads the right one. Building from source is
+only for developers changing the Rust engine or shim, or anyone targeting a
+platform without a prebuilt binary. It needs a Rust toolchain:
 
 ```sh
 bash build/build.sh          # -> ./fastm.plugin  (universal on macOS, x86_64 on Linux)
@@ -116,20 +120,6 @@ MSVC (run it from a Developer PowerShell for VS). The `build` GitHub Actions
 workflow compiles the plugin on Linux, macOS, and Windows on every push and uploads
 each as an artifact, so a Windows binary is produced without a Windows machine. It
 still needs a smoke test on a Windows copy of Stata before release.
-
-## How it fits together
-
-```
-  Stata (ado + Mata)                 <- syntax, factor vars, margins, output
-        |  plugin call  (the only C/FFI boundary)
-  fastm.plugin   = shim.c + vendor/stplugin.c + Rust   <- marshals Stata <-> Rust
-        |  plain Rust calls (no FFI)
-  topica-core (Rust)                 <- fit + labels + coherence + estimateEffect
-```
-
-The plugin is itself Rust and depends on `topica-core` as an ordinary crate, so
-the only C boundary is Stata ↔ plugin. The engine pieces (`from_texts`,
-`inspect`, `effects`) live in `topica-core` and are shared with faSTM and topica.
 
 ## Why a plugin (not Python, not pure Mata)
 
@@ -164,8 +154,13 @@ Next:
   / SSC.
 - A Stata Journal article introducing the command.
 
-## Relation to faSTM and topica
+## Relation to stm, faSTM, and topica
 
-The model and its post-fit math live once, in `topica-core` (Rust), and are
-consumed by faSTM (R), topica (Python), and `fastm` (Stata). The estimator is
-cross-validated against R `stm` through faSTM.
+`fastm` implements the structural topic model introduced in R's `stm`. The engine
+and its post-fit math live once, in `topica-core` (Rust), shared with faSTM (R) and
+topica (Python); the estimator is parity-checked against R `stm` on poliblog.
+
+If you use `fastm`, please cite the structural topic model:
+
+> Roberts, M. E., B. M. Stewart, and D. Tingley. 2019. stm: An R Package for
+> Structural Topic Models. *Journal of Statistical Software* 91(2): 1–40.
