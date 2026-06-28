@@ -22,6 +22,7 @@ log using "fastm_sj_replication.log", replace text
 *--- Install fastm (with searchk) from GitHub ---------------------------------
 net install fastm, ///
     from("https://raw.githubusercontent.com/nealcaren/faSTM-stata/main/ado") replace
+discard          // drop any fastm already in memory so the fresh install loads
 which fastm
 
 *==============================================================================
