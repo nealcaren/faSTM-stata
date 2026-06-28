@@ -153,6 +153,15 @@ int main(int argc, char **argv)
 {
     const char *plugin = (argc > 1) ? argv[1] : "fastm.plugin";
 
+#ifndef _WIN32
+    /* The Linux plugin leaves the GCC unwinder (_Unwind_*) as an undefined
+     * symbol to be satisfied by the host process, as Stata's does. Preload
+     * libgcc_s into the global scope so RTLD_NOW can resolve it. Harmless
+     * no-op where the lib is absent (macOS provides the unwinder already). */
+    if (!dlopen("libgcc_s.so.1", RTLD_NOW | RTLD_GLOBAL))
+        dlopen("libgcc_s.so", RTLD_NOW | RTLD_GLOBAL);
+#endif
+
     dl_t h = dl_open(plugin);
     if (!h) { fprintf(stderr, "FAIL: could not load '%s': %s\n", plugin, dl_err()); return 2; }
 
