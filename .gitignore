@@ -24,3 +24,6 @@ crate/.cargo/
 
 # replication package log ships with the SJ submission
 !replication/*.log
+
+# Zotero reference library (local only; 41MB of source PDFs, not part of the package)
+zotero/

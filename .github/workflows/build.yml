@@ -52,6 +52,34 @@ jobs:
         if: runner.os == 'Windows'
         run: pwsh build/build.ps1
 
+      # Smoke test: load the freshly built plugin with a fake-Stata host and run
+      # one real STM fit. On windows-latest this exercises the shipped Windows
+      # binary on a real Windows loader (no Stata license needed).
+      - name: Smoke test (Unix)
+        if: runner.os != 'Windows'
+        run: bash tests/win_smoke/run.sh fastm.plugin
+
+      # Import guard: the Windows binary must not depend on a Visual C++ runtime
+      # DLL (vcruntime140/msvcp140/msvcr*), which is absent on a clean Stata box.
+      # The CRT is statically linked; this fails the build if that ever regresses.
+      - name: Import guard — no VC++ runtime dependency (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $deps = dumpbin /dependents fastm.plugin | Out-String
+          Write-Host $deps
+          if ($deps -match '(?i)vcruntime|msvcp|msvcr\d') {
+            Write-Error 'plugin imports a VC++ runtime DLL; static CRT link regressed'
+            exit 1
+          }
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          cl /nologo /O2 /I vendor tests\win_smoke\host.c /Fe:host_smoke.exe
+          host_smoke.exe fastm.plugin
+
       - uses: actions/upload-artifact@v4
         with:
           name: fastm-plugin-${{ matrix.name }}
