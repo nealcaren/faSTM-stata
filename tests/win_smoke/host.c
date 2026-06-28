@@ -32,7 +32,14 @@ static void *dl_sym(dl_t h, const char *s) { return (void *)GetProcAddress(h, s)
 #else
 #include <dlfcn.h>
 typedef void *dl_t;
-static dl_t dl_open(const char *p) { return dlopen(p, RTLD_NOW | RTLD_LOCAL); }
+static dl_t dl_open(const char *p)
+{
+    /* dlopen() of a bare leaf name searches the system library path, not the
+     * cwd; prepend ./ so a plain "fastm.plugin" resolves locally (Linux). */
+    char buf[1024];
+    if (!strchr(p, '/')) { snprintf(buf, sizeof buf, "./%s", p); p = buf; }
+    return dlopen(p, RTLD_NOW | RTLD_LOCAL);
+}
 static void *dl_sym(dl_t h, const char *s) { return dlsym(h, s); }
 #endif
 
