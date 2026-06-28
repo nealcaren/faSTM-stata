@@ -21,3 +21,6 @@ docs/
 
 # local cargo override for engine dev (not for distribution)
 crate/.cargo/
+
+# replication package log ships with the SJ submission
+!replication/*.log
