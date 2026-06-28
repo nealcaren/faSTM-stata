@@ -2,10 +2,10 @@
 
 `fastm` brings **structural topic models** (STM) to **Stata**. It is essentially a
 Stata port of the R package [**stm**](https://www.structuraltopicmodel.com/)
-(Roberts, Stewart, and Tingley 2019): it fits the same model — where document-level
-covariates shape both how prevalent a topic is and how its words are chosen — and
-reproduces stm's results to within 0.001% on the poliblog corpus. Fitting,
-tokenization, labels, diagnostics, and covariate-effect estimation all run in a
+(Roberts, Stewart, and Tingley 2019): it fits the same model, in which
+document-level covariates shape both how prevalent a topic is and how its words
+are chosen, and reproduces stm's results to within 0.001% on the poliblog corpus.
+Fitting, tokenization, labels, diagnostics, and covariate-effect estimation run in a
 compiled Rust plugin, so **no Python and no Rust toolchain are needed to use it**:
 you install an ado/Mata package plus a precompiled `fastm.plugin`.
 
@@ -138,29 +138,3 @@ build/        build.sh / build.ps1: compile + link fastm.plugin per OS
 examples/     *.do demos (fit, covariates, factor vars, margins)
 tests/        win_smoke/: load the plugin and run a fit, no Stata (CI smoke test)
 ```
-
-## Status and roadmap
-
-Done: fitting, preprocessing controls, prevalence with factor variables and
-smooth `spline()` terms, content (SAGE) covariates, labels/diagnostics,
-estimateEffect with `e(b)`/`e(V)` (test/lincom/margins), `predict`, `searchk`,
-`estat thoughts`/`estat labels`, `e(topiccorr)`, `heldout()`, `nstart()`,
-`saving()`, replay, help files, and real-corpus parity vs R `stm` on poliblog
-(prevalence, `s(day)`, and content models all match to <0.001%).
-
-Next:
-
-- **Packaging**: ship prebuilt macOS + Linux (and Windows) plugins, `net install`
-  / SSC.
-- A Stata Journal article introducing the command.
-
-## Relation to stm, faSTM, and topica
-
-`fastm` implements the structural topic model introduced in R's `stm`. The engine
-and its post-fit math live once, in `topica-core` (Rust), shared with faSTM (R) and
-topica (Python); the estimator is parity-checked against R `stm` on poliblog.
-
-If you use `fastm`, please cite the structural topic model:
-
-> Roberts, M. E., B. M. Stewart, and D. Tingley. 2019. stm: An R Package for
-> Structural Topic Models. *Journal of Statistical Software* 91(2): 1–40.
