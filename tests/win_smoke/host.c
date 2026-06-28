@@ -29,6 +29,7 @@
 typedef HMODULE dl_t;
 static dl_t dl_open(const char *p) { return LoadLibraryA(p); }
 static void *dl_sym(dl_t h, const char *s) { return (void *)GetProcAddress(h, s); }
+static const char *dl_err(void) { static char b[64]; snprintf(b, sizeof b, "error %lu", GetLastError()); return b; }
 #else
 #include <dlfcn.h>
 typedef void *dl_t;
@@ -41,6 +42,7 @@ static dl_t dl_open(const char *p)
     return dlopen(p, RTLD_NOW | RTLD_LOCAL);
 }
 static void *dl_sym(dl_t h, const char *s) { return dlsym(h, s); }
+static const char *dl_err(void) { const char *e = dlerror(); return e ? e : "(no dlerror)"; }
 #endif
 
 /* ----------------------------------------------------------------------------
@@ -152,7 +154,7 @@ int main(int argc, char **argv)
     const char *plugin = (argc > 1) ? argv[1] : "fastm.plugin";
 
     dl_t h = dl_open(plugin);
-    if (!h) { fprintf(stderr, "FAIL: could not load '%s'\n", plugin); return 2; }
+    if (!h) { fprintf(stderr, "FAIL: could not load '%s': %s\n", plugin, dl_err()); return 2; }
 
     pginit_t pginit = (pginit_t)dl_sym(h, "pginit");
     stata_call_t stata_call = (stata_call_t)dl_sym(h, "stata_call");
