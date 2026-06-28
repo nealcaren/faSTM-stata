@@ -1,4 +1,4 @@
-*! fastm 0.5.1  Structural Topic Models in Stata (engine: topica-core, Rust)
+*! fastm 0.5.2  Structural Topic Models in Stata (engine: topica-core, Rust)
 *! fastm textvar [if] [in], k(#) [prevalence(fvvarlist) seed(#) iters(#) generate(name) replace]
 program fastm, eclass
     version 15.0
@@ -356,12 +356,15 @@ end
 
 // Plugin load: BARE top-level code. A plugin loaded inside a running program
 // does not persist, so it must be declared here (auto-load runs this too). Dev
-// build first, else the per-OS plugin shipped with the package.
+// build first (fastm.plugin), else the per-OS plugin shipped with the package.
+// Pass the bare filename to using() and let Stata resolve it on the adopath:
+// findfile can return a ~-prefixed path (e.g. PLUS = ~/ado/plus) that
+// program ... , plugin using() cannot open (r(601)).
 capture findfile fastm.plugin
-if _rc {
+if !_rc local _fpl fastm.plugin
+else {
     if "`c(os)'" == "Windows"      local _fpl fastm-windows-x86_64.plugin
     else if strpos("`c(machine_type)'", "Mac") local _fpl fastm-macos.plugin
     else                            local _fpl fastm-linux-x86_64.plugin
-    capture findfile `_fpl'
 }
-if !_rc capture program fastmplugin, plugin using(`"`r(fn)'"')
+capture program fastmplugin, plugin using("`_fpl'")
