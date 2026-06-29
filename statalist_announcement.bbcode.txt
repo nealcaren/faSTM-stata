@@ -2,7 +2,7 @@ Dear Statalist users,
 
 I would like to announce [B]fastm[/B], a new Stata package for fitting [B]Structural Topic Models[/B] (STM).
 
-fastm is essentially a Stata port of the R package [URL="https://www.structuraltopicmodel.com/"]stm[/URL] (Roberts, Stewart, and Tingley 2019). It fits the same model -- one in which document-level covariates can shape both how [I]prevalent[/I] a topic is and how its [I]words[/I] are chosen -- and reproduces stm's results to within 0.001% on the poliblog corpus. Fitting, tokenization, FREX labeling, diagnostics, and covariate-effect estimation all run in a compiled Rust plugin, so [B]no Python and no Rust toolchain are needed to use it[/B]: you install an ado/Mata package plus a precompiled fastm.plugin, and fastm.ado loads the binary that matches your operating system.
+fastm is a Stata port of the R package [URL="https://www.structuraltopicmodel.com/"]stm[/URL] (Roberts, Stewart, and Tingley 2019). It fits the same model, one in which document-level covariates can shape both how [I]prevalent[/I] a topic is and how its [I]words[/I] are chosen, and it reproduces stm's results to within 0.001% on the poliblog corpus. Fitting, tokenization, FREX labeling, diagnostics, and covariate-effect estimation all run in a compiled Rust plugin, so [B]no Python and no Rust toolchain are needed to use it[/B]: you install an ado/Mata package plus a precompiled fastm.plugin, and fastm.ado loads the binary that matches your operating system.
 
 To install, type:
 
@@ -64,7 +64,7 @@ topic8       |
 ------------------------------------------------------------------------------
 [/CODE]
 
-Because fastm posts e(b)/e(V) with one equation per topic, the usual Stata postestimation machinery works directly on topic prevalence. For the Israel/Iran topic (topic 8), we can test whether liberal and conservative blogs differ, and plot the predicted prevalence:
+Because fastm posts e(b)/e(V) with one equation per topic, the usual Stata postestimation machinery works on topic prevalence. For the Israel/Iran topic (topic 8), we can test whether liberal and conservative blogs differ, and plot the predicted prevalence:
 
 [CODE]
 . test [topic8]1.liberal
@@ -91,9 +91,9 @@ Conservative  |   .0571003    .001919    29.75   0.000     .0533391    .0608616
 . marginsplot
 [/CODE]
 
-Conservative blogs devote roughly 5.7% of their content to the Israel/Iran topic versus 2.3% for liberal blogs -- a difference test confirms and marginsplot draws. predict p8, pr topic(8) writes each document's fitted proportion, and a smooth campaign-time trend follows from adding spline(day, df(5)).
+Conservative blogs devote roughly 5.7% of their content to the Israel/Iran topic versus 2.3% for liberal blogs, a gap that test confirms and marginsplot draws. predict p8, pr topic(8) writes each document's fitted proportion, and a smooth campaign-time trend follows from adding spline(day, df(5)).
 
-[B]Looking for Windows beta testers.[/B] The package is validated on macOS and Linux, and the Windows plugin is built and smoke-tested in CI, but I would like confirmation that it loads and runs correctly on a real Windows copy of Stata before a 1.0 release. If you run Stata on Windows and are willing to try the install above and report back, I would be very grateful -- a quick "it worked," or a copy of any error message, is exactly what I need.
+[B]Looking for Windows beta testers.[/B] I have validated the package on macOS and Linux, and the Windows plugin is built and smoke-tested in CI, but I would like confirmation that it loads and runs correctly on a real Windows copy of Stata before a 1.0 release. If you run Stata on Windows and are willing to try the install above and report back, I would be grateful. A quick "it worked," or a copy of any error message, is exactly what I need.
 
 Comments, suggestions, and bug reports are welcome.
 
