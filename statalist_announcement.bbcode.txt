@@ -1,0 +1,104 @@
+Dear Statalist users,
+
+I would like to announce [B]fastm[/B], a new Stata package for fitting [B]Structural Topic Models[/B] (STM).
+
+fastm is essentially a Stata port of the R package [URL="https://www.structuraltopicmodel.com/"]stm[/URL] (Roberts, Stewart, and Tingley 2019). It fits the same model -- one in which document-level covariates can shape both how [I]prevalent[/I] a topic is and how its [I]words[/I] are chosen -- and reproduces stm's results to within 0.001% on the poliblog corpus. Fitting, tokenization, FREX labeling, diagnostics, and covariate-effect estimation all run in a compiled Rust plugin, so [B]no Python and no Rust toolchain are needed to use it[/B]: you install an ado/Mata package plus a precompiled fastm.plugin, and fastm.ado loads the binary that matches your operating system.
+
+To install, type:
+
+[CODE]
+net install fastm, from("https://raw.githubusercontent.com/nealcaren/faSTM-stata/main/ado/") replace
+[/CODE]
+
+Requires Stata 15 or later. The macOS plugin is a universal binary (Intel and Apple Silicon); the Linux and Windows plugins are x86_64.
+
+Key features of fastm include:
+
+[LIST]
+[*]Fit an STM directly from a Stata string variable (one document per observation); honors if/in.
+[*]Transparent preprocessing controls: stopwords, minimum document frequency, maximum document percentage, lowercasing (stm's prepDocuments).
+[*]Prevalence covariates with full factor-variable syntax: i.party, c.year, interactions i.party##c.year, and smooth spline() terms (stm's s()).
+[*]Content covariates via the SAGE content model, shifting topic-word distributions across groups.
+[*]Topic labels and diagnostics: FREX / probability / lift / score, semantic coherence, and exclusivity, computed stm-faithfully in the engine.
+[*][B]estimateEffect[/B]: covariate effects on topic prevalence, estimated by the method of composition with standard errors that propagate per-document topic-estimation uncertainty, posted as e(b)/e(V) so that test, lincom, margins, and marginsplot all work.
+[*]predict (xtreg-style) for prevalence-fitted topic proportions, and searchk to choose K by held-out document completion.
+[/LIST]
+
+The example below fits a 20-topic model on Roberts et al.'s political-blog corpus (5,000 posts from the 2008 U.S. campaign), loaded straight from the web:
+
+[CODE]
+. use "https://raw.githubusercontent.com/nealcaren/faSTM-stata/main/data/poliblog.dta", clear
+
+. fastm text, k(20) prevalence(i.liberal) seed(2138)
+fastm: corpus = 5000 docs, 2632 terms, 1005745 tokens; fitting K=20 ...
+fastm: prep = lowercase on, mindocfreq 1, maxdocpct 100%, stopwords none
+fastm: prevalence design = intercept + 1 covariate(s)
+fastm: top FREX words per topic [coherence / exclusivity] --
+  topic  2 [coh  -51.83, excl   9.80]: parti republican democrat conserv pelosi gop nomine elect
+  topic  6 [coh  -81.06, excl   9.79]: wright barack ayer obama black chicago jeremiah racist
+  topic  8 [coh  -81.51, excl   9.75]: israel isra iran hama iranian terrorist islam bomb
+  topic 10 [coh  -68.10, excl   9.73]: energi oil economi tax price health drill job
+  topic 15 [coh  -73.33, excl   9.73]: palin mccain sarah romney john alaska giuliani governor
+  (... 15 more topics ...)
+fastm: estimateEffect done (1 term(s), 100 draws, method of composition)
+fastm: done. bound=-6943448.29, iters=24, mean coherence=-68.71, mean exclusivity=9.67
+
+Structural Topic Model                         Documents      =     5,000
+Engine: topica-core (Rust)                     Vocabulary     =     2,632
+                                               Topics (K)     =        20
+                                               Prevalence     =         1 term(s)
+                                               Final bound    = -6.94e+06
+Mean semantic coherence  =    -68.71           Mean exclusivity =      9.67
+Topic proportions in theta1-theta20 (EM iters        24)
+
+Covariate effects on topic proportions (method of composition)
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+  (equations topic1-topic20; topic 8 = Israel / Iran / terrorism shown)
+topic8       |
+       _cons |   .0571003    .001919    29.75   0.000     .0533391    .0608616
+             |
+     liberal |
+    Liberal  |  -.0341273   .0028891   -11.81   0.000    -.0397898   -.0284648
+------------------------------------------------------------------------------
+[/CODE]
+
+Because fastm posts e(b)/e(V) with one equation per topic, the usual Stata postestimation machinery works directly on topic prevalence. For the Israel/Iran topic (topic 8), we can test whether liberal and conservative blogs differ, and plot the predicted prevalence:
+
+[CODE]
+. test [topic8]1.liberal
+
+ ( 1)  [topic8]1.liberal = 0
+
+           chi2(  1) =  139.53
+         Prob > chi2 =    0.0000
+
+. margins liberal, predict(equation(topic8))
+
+Adjusted predictions                            Number of obs     =      5,000
+Expression   : Linear prediction, predict(equation(topic8))
+
+-------------------------------------------------------------------------------
+              |            Delta-method
+              |     Margin   Std. Err.      z    P>|z|     [95% Conf. Interval]
+--------------+----------------------------------------------------------------
+      liberal |
+Conservative  |   .0571003    .001919    29.75   0.000     .0533391    .0608616
+     Liberal  |    .022973   .0021606    10.63   0.000     .0187383    .0272078
+-------------------------------------------------------------------------------
+
+. marginsplot
+[/CODE]
+
+Conservative blogs devote roughly 5.7% of their content to the Israel/Iran topic versus 2.3% for liberal blogs -- a difference test confirms and marginsplot draws. predict p8, pr topic(8) writes each document's fitted proportion, and a smooth campaign-time trend follows from adding spline(day, df(5)).
+
+[B]Looking for Windows beta testers.[/B] The package is validated on macOS and Linux, and the Windows plugin is built and smoke-tested in CI, but I would like confirmation that it loads and runs correctly on a real Windows copy of Stata before a 1.0 release. If you run Stata on Windows and are willing to try the install above and report back, I would be very grateful -- a quick "it worked," or a copy of any error message, is exactly what I need.
+
+Comments, suggestions, and bug reports are welcome.
+
+Reference:
+
+Roberts, M. E., Stewart, B. M., and Tingley, D. 2019. stm: An R package for structural topic models. Journal of Statistical Software 91(2): 1-40. https://doi.org/10.18637/jss.v091.i02.
+
+Neal Caren
