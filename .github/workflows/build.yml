@@ -85,3 +85,17 @@ jobs:
           name: fastm-plugin-${{ matrix.name }}
           path: fastm.plugin
           if-no-files-found: error
+
+  # The job above proves a plugin *can* be built from the pinned engine. It says
+  # nothing about the prebuilt binaries actually committed to ado/, which are what
+  # users install. Those drift: when the topica-core pin moved to v0.32.0 (which
+  # changed the spectral initialization), CI rebuilt Linux and Windows but the
+  # macOS plugin was never refreshed, so macOS users silently got different topics
+  # than everyone else. This job checks the shipped binaries themselves.
+  shipped-plugins:
+    name: shipped plugins match the pinned engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify ado/*.plugin provenance
+        run: bash tests/check_plugins.sh
