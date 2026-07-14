@@ -1,4 +1,4 @@
-*! fastm 0.5.2  Structural Topic Models in Stata (engine: topica-core, Rust)
+*! fastm 0.6.0  Structural Topic Models in Stata (engine: topica-core, Rust)
 *! fastm textvar [if] [in], k(#) [prevalence(fvvarlist) seed(#) iters(#) generate(name) replace]
 program fastm, eclass
     version 15.0
@@ -15,7 +15,7 @@ program fastm, eclass
 
     syntax varname [if] [in], K(integer) ///
         [ PREValence(varlist fv ts) SPline(string) CONTent(varname) ///
-          noLOWercase STOPwords(string) MINdocfreq(integer 1) MAXdocpct(real 100) STEM ///
+          noLOWercase STOPwords(string) MINdocfreq(integer 1) MAXdocpct(real 100) ///
           HELDout(real 0) NSTART(integer 1) ///
           SEED(integer 42) ITERs(integer 200) GENerate(name) SAVing(string) replace ]
 
@@ -23,14 +23,32 @@ program fastm, eclass
         di as error "k() must be >= 2"
         exit 198
     }
-    if "`generate'" == "" local generate theta
-    if "`stem'" != "" {
-        di as error "stem is not yet supported (the engine has no stemmer); stem upstream for now"
+    confirm string variable `varlist'
+    if `iters' < 1 {
+        di as error "iters() must be positive"
         exit 198
     }
+    if `nstart' < 1 {
+        di as error "nstart() must be positive"
+        exit 198
+    }
+    if `mindocfreq' < 1 {
+        di as error "mindocfreq() must be positive"
+        exit 198
+    }
+    if `maxdocpct' <= 0 | `maxdocpct' > 100 {
+        di as error "maxdocpct() must be in (0,100]"
+        exit 198
+    }
+    if `heldout' < 0 | `heldout' >= 100 {
+        di as error "heldout() must be in [0,100)"
+        exit 198
+    }
+    if "`generate'" == "" local generate theta
     local lower = ("`lowercase'" != "nolowercase")   // default on; nolowercase turns off
 
-    // Resolve stopwords() to a file path the plugin loads (via the global below).
+    // Resolve stopwords() to a file path the plugin loads. The plugin API has
+    // no string-option channel, so transient file paths are passed by globals.
     local stopfile ""
     if "`stopwords'" != "" & "`stopwords'" != "none" {
         if "`stopwords'" == "english" {
@@ -52,14 +70,32 @@ program fastm, eclass
     }
     global fastm_stopfile `"`stopfile'"'
 
-    // saving(filename[, replace]): the plugin writes beta+vocab to a temp CSV here.
+    // saving(filename[, replace]): the plugin writes beta+vocab to a temp CSV
+    // named in a transient global; Stata then imports and saves it below.
     local sfile ""
     local srep ""
     global fastm_betafile ""
     if `"`saving'"' != "" {
         gettoken sfile srest : saving, parse(",")
         local sfile = trim(`"`sfile'"')
-        if strpos(`"`srest'"', "replace") local srep replace
+        local srest = trim(`"`srest'"')
+        if `"`sfile'"' == "" {
+            di as error "saving() requires a filename"
+            exit 198
+        }
+        if `"`srest'"' != "" {
+            if substr(`"`srest'"', 1, 1) != "," {
+                di as error "saving() syntax is saving(filename[, replace])"
+                exit 198
+            }
+            gettoken comma sopts : srest, parse(",")
+            local sopts = strtrim(`"`sopts'"')
+            if `"`sopts'"' == "replace" local srep replace
+            else {
+                di as error "saving() option must be replace"
+                exit 198
+            }
+        }
         tempfile betacsv
         global fastm_betafile `"`betacsv'"'
     }
@@ -128,7 +164,8 @@ program fastm, eclass
 
     // content(var): SAGE content covariate (a single categorical). Encode its
     // levels to 0-based group indices for the engine; passed as the last varlist
-    // column (not part of the prevalence design).
+    // column (not part of the prevalence design). Content-level labels are kept
+    // in globals because estat is a separate autoloaded program.
     local ng 0
     local cgrp ""
     capture macro drop fastm_clev_*
@@ -181,7 +218,8 @@ program fastm, eclass
         matrix fastm_gamma = J(1 + `nprev', `k' - 1, .)
     }
 
-    // Clear any stale labels/perspectives from a previous fit (plugin repopulates).
+    // Clear any stale labels/perspectives from a previous fit. The plugin
+    // repopulates these globals for estat labels/perspectives.
     capture macro drop fastm_lbl_*
     capture macro drop fastm_persp_*
 
@@ -189,6 +227,13 @@ program fastm, eclass
     // then the content group var (last) when content() is used.
     plugin call fastmplugin `varlist' `generate'1-`generate'`k' `prevvars' `cgrp' ///
         if `touse', fit `k' `seed' `iters' `nprev' `mindocfreq' `maxdocpct' `lower' `heldout' `nstart' `ng'
+    capture macro drop fastm_stopfile
+    capture macro drop fastm_betafile
+
+    // Tokenization and vocabulary trimming can remove documents that passed the
+    // initial Stata marksample. The plugin writes theta only for retained
+    // documents, so tighten e(sample) to the corpus actually fit.
+    quietly replace `touse' = 0 if missing(`generate'1)
 
     // Post e(b)/e(V) so test/lincom/ereturn display work. Equation = topic#,
     // coefficient = prevalence term (matches the plugin's fill order: topic, term).
@@ -204,9 +249,12 @@ program fastm, eclass
         matrix rownames fastm_eV = `bn'
         matrix colnames fastm_eV = `bn'
         ereturn post fastm_eb fastm_eV, esample(`touse')
+        ereturn local marginsok "XB default"
+        ereturn local marginsnotok "PR STDP SCores"
     }
     else {
-        ereturn clear
+        ereturn post, esample(`touse') properties(nob noV)
+        ereturn local marginsnotok "_ALL"
     }
     ereturn scalar k            = scalar(fastm_K)
     ereturn scalar n_terms      = scalar(fastm_V)
@@ -226,6 +274,32 @@ program fastm, eclass
     ereturn local textvar    "`varlist'"
     ereturn local cmd        "fastm"
     ereturn local estat_cmd  "fastm_estat"
+    ereturn local predict    "fastm_predict"
+
+    // Persist postestimation display state with the estimates. The plugin can
+    // only write Stata globals, but estat should survive estimates store/restore.
+    foreach typ in prob frex lift score {
+        forvalues t = 1/`k' {
+            local _gname fastm_lbl_`typ'_`t'
+            local _lbl `"${`_gname'}"'
+            ereturn local lbl_`typ'_`t' `"`_lbl'"'
+        }
+    }
+    if `ng' > 0 {
+        forvalues g = 0/`=`ng'-1' {
+            local _gname fastm_clev_`g'
+            local _clev `"${`_gname'}"'
+            ereturn local clev_`g' `"`_clev'"'
+            forvalues t = 1/`k' {
+                local _gname fastm_persp_`g'_`t'
+                local _persp `"${`_gname'}"'
+                ereturn local persp_`g'_`t' `"`_persp'"'
+            }
+        }
+    }
+    capture macro drop fastm_lbl_*
+    capture macro drop fastm_persp_*
+    capture macro drop fastm_clev_*
 
     local tn ""
     forvalues t = 1/`k' {
@@ -243,7 +317,6 @@ program fastm, eclass
         matrix rownames fastm_gamma = _cons `collabels'
         matrix colnames fastm_gamma = `gcols'
         ereturn matrix gamma = fastm_gamma
-        ereturn local predict "fastm_predict"
     }
 
     // saving(): turn the plugin's beta+vocab CSV into a .dta (data preserved).
@@ -357,6 +430,8 @@ end
 // Plugin load: BARE top-level code. A plugin loaded inside a running program
 // does not persist, so it must be declared here (auto-load runs this too). Dev
 // build first (fastm.plugin), else the per-OS plugin shipped with the package.
+// This block is intentionally duplicated in searchk.ado so either command can
+// be autoloaded independently and still declare the plugin at top level.
 // Pass the bare filename to using() and let Stata resolve it on the adopath:
 // findfile can return a ~-prefixed path (e.g. PLUS = ~/ado/plus) that
 // program ... , plugin using() cannot open (r(601)).

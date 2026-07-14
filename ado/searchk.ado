@@ -1,19 +1,34 @@
-*! searchk 0.1.0  K selection for fastm (held-out likelihood + coherence/exclusivity)
+*! searchk 0.2.0  K selection for fastm (held-out likelihood + coherence/exclusivity)
 *! searchk textvar [if] [in], k(numlist) [prevalence(...) heldout(#) <prep opts>]
 program searchk, rclass
     version 15.0
     syntax varname [if] [in], K(numlist integer >=2 sort) ///
         [ PREValence(varlist fv ts) HELDout(real 50) ///
-          noLOWercase STOPwords(string) MINdocfreq(integer 1) MAXdocpct(real 100) STEM ///
+          noLOWercase STOPwords(string) MINdocfreq(integer 1) MAXdocpct(real 100) ///
           SEED(integer 42) ITERs(integer 200) ]
 
-    if "`stem'" != "" {
-        di as error "stem is not yet supported"
+    confirm string variable `varlist'
+    if `iters' < 1 {
+        di as error "iters() must be positive"
+        exit 198
+    }
+    if `mindocfreq' < 1 {
+        di as error "mindocfreq() must be positive"
+        exit 198
+    }
+    if `maxdocpct' <= 0 | `maxdocpct' > 100 {
+        di as error "maxdocpct() must be in (0,100]"
+        exit 198
+    }
+    if `heldout' <= 0 | `heldout' >= 100 {
+        di as error "heldout() must be in (0,100)"
         exit 198
     }
     local lower = ("`lowercase'" != "nolowercase")
 
     // stopwords() -> file path the plugin loads (same resolution as fastm).
+    // The plugin API has no string-option channel, so this path is passed by a
+    // transient global and cleared after the search.
     local stopfile ""
     if "`stopwords'" != "" & "`stopwords'" != "none" {
         if "`stopwords'" == "english" {
@@ -73,6 +88,8 @@ program searchk, rclass
         matrix `SK'[`r',4] = scalar(fastm_sk_excl)
         matrix `SK'[`r',5] = scalar(fastm_sk_bound)
     }
+    capture macro drop fastm_stopfile
+    capture macro drop fastm_betafile
     matrix rownames `SK' = `rn'
 
     di ""
@@ -86,6 +103,8 @@ end
 
 // Plugin load: BARE top-level code (auto-load runs this; an in-program load does
 // not persist). Dev build first, else the per-OS plugin shipped with the package.
+// This block is intentionally duplicated from fastm.ado so either command can
+// be autoloaded independently and still declare the plugin at top level.
 // Pass the bare filename to using() and let Stata resolve it on the adopath:
 // findfile can return a ~-prefixed path (e.g. PLUS = ~/ado/plus) that
 // program ... , plugin using() cannot open (r(601)).

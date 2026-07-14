@@ -1,8 +1,8 @@
-*! fastm_predict 0.5.1  predict handler for fastm (pr / xb / stdp)
+*! fastm_predict 0.6.0  predict handler for fastm (pr / xb / stdp)
 *! In its own ado so Stata can autoload it when predict/margins is called.
 
 // predict after fastm (xtreg-style). One topic per call via topic(#).
-//   pr (default) : prevalence-fitted topic proportion, softmax([X*gamma, 0])
+//   pr (default) : fitted document-topic proportion
 //   xb           : prevalence linear predictor for the topic (reference topic = 0)
 program fastm_predict
     version 15.0
@@ -14,70 +14,58 @@ program fastm_predict
     }
     marksample touse, novarlist
 
-    // pr: the model's prevalence-fitted proportion, softmax([X*gamma, 0]).
-    if "`pr'" != "" {
-        if "`e(prevalence)'" == "" {
-            di as error "pr requires a model fit with prevalence()"
-            exit 459
-        }
-        local kk = e(k)
-        if `topic' < 1 | `topic' > `kk' {
-            di as error "pr requires topic(#) in 1..`kk'"
+    local nstat = ("`pr'" != "") + ("`xb'" != "") + ("`stdp'" != "")
+    if `nstat' > 1 {
+        di as error "only one of pr, xb, or stdp may be specified"
+        exit 198
+    }
+
+    local kk = e(k)
+
+    // Which statistic are we producing? With none named, xb is the default for a
+    // model carrying posted prevalence effects and pr otherwise.
+    local stat "`pr'`xb'`stdp'"
+    if "`stat'" == "" {
+        if e(n_prevalence) > 0 | `"`equation'"' != "" local stat xb
+        else local stat pr
+    }
+
+    // pr names a topic and nothing else, so there is no defensible default:
+    // silently returning topic 1 would be a wrong answer, not a convention.
+    // xb and stdp follow Stata's rule for multiequation models, where an
+    // unspecified equation means the first one -- this is also how margins
+    // calls us.
+    if `topic' == 0 {
+        if "`stat'" == "pr" & `"`equation'"' == "" {
+            di as error "topic() is required"
             exit 198
         }
-        fvexpand `e(prevalence)'
-        local expnames `r(varlist)'
-        fvrevar `e(prevalence)'
-        local revars `r(varlist)'
-        local prevvars ""
-        local i 0
-        foreach nm of local expnames {
-            local ++i
-            local tv : word `i' of `revars'
-            if !strmatch("`nm'", "*b.*") & !strmatch("`nm'", "*o.*") local prevvars `prevvars' `tv'
+        local topic 1
+    }
+    if `topic' < 1 | `topic' > `kk' {
+        di as error "topic() must be in 1..`kk'"
+        exit 198
+    }
+
+    if "`stat'" == "pr" {
+        local tv `e(generate)'`topic'
+        capture confirm numeric variable `tv'
+        if _rc {
+            di as error "`tv' is not in the data (topic proportions were dropped); rerun fastm"
+            exit 198
         }
-        tempname G
-        matrix `G' = e(gamma)
-        quietly generate double `varlist' = .
-        mata: fastm_pred("`varlist'", "`touse'", "`prevvars'", "`G'", `topic', `kk', "proportions")
+        quietly generate double `varlist' = `tv' if `touse'
         exit
     }
 
     // xb / stdp: the estimateEffect linear prediction for one topic equation,
     // via the native engine (margins-compatible, delta-method SEs).
+    if "`e(prevalence)'" == "" & e(n_prevalence) == 0 {
+        di as error "xb and stdp require a model fit with prevalence() or spline()"
+        exit 459
+    }
     if `"`equation'"' == "" {
-        if `topic' > 0 local equation equation(topic`topic')
-        else local equation equation(topic1)
+        local equation equation(topic`topic')
     }
-    _predict `typlist' `varlist' if `touse', `xb' `stdp' `equation'
-end
-
-// Mata helper for the pr path. Defined here (not in fastm.ado) so it is
-// compiled whenever Stata autoloads this predict handler.
-mata:
-void fastm_pred(string scalar newvar, string scalar touse, string scalar prevvars,
-                 string scalar Gname, real scalar topic, real scalar K, string scalar stat)
-{
-    real matrix G, Xcov, X, XB, full, Pr, yv, e
-    real colvector out, m, s
-    real scalar n
-    G = st_matrix(Gname)                         // (1+ncov) x (K-1)
-    st_view(Xcov = ., ., tokens(prevvars), touse)
-    n = rows(Xcov)
-    X = (J(n, 1, 1), Xcov)                        // intercept + covariates
-    XB = X * G                                    // N x (K-1)
-    if (stat == "xb") {
-        out = (topic < K ? XB[, topic] : J(n, 1, 0))
-    }
-    else {
-        full = (XB, J(n, 1, 0))                   // reference topic = 0
-        m = rowmax(full)
-        e = exp(full :- m)
-        s = rowsum(e)
-        Pr = e :/ s
-        out = Pr[, topic]
-    }
-    st_view(yv = ., ., newvar, touse)
-    yv[., .] = out
-}
+    _predict `typlist' `varlist' if `touse', `stat' `equation'
 end

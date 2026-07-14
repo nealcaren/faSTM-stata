@@ -1,7 +1,7 @@
-* Postestimation demo: test / lincom / margins after fastm.
-* Run from repo root after build/build.sh.
-
 clear all
+set more off
+
+adopath ++ "ado"
 run "ado/fastm.ado"
 run "ado/fastm_predict.ado"
 
@@ -20,20 +20,22 @@ input str244 text
 "the recipe needs fresh dough fresh flour and a hot oven to bake"
 end
 
-gen byte sporty = (_n <= 6)
-
+generate byte sporty = (_n <= 6)
 fastm text, k(2) prevalence(i.sporty) seed(42) iters(200)
 
-* Wald test and cross-topic linear combination on the posted e(b)/e(V):
-test [topic1]1.sporty
-lincom [topic1]1.sporty - [topic2]1.sporty
+assert "`e(marginsok)'" == "XB default"
+assert strpos("`e(marginsnotok)'", "STDP")
 
-* Predicted topic-1 proportion by the covariate (delta-method SEs):
-margins i.sporty, predict(equation(topic1))
-* marginsplot     // graphics: run interactively
+capture noisily margins i.sporty
+assert _rc == 0
+capture noisily margins i.sporty, predict(equation(topic1))
+assert _rc == 0
+capture noisily margins i.sporty, predict(equation(topic1)) noestimcheck
+assert _rc == 0
 
-* predict (xtreg-style):
-predict p1, pr topic(1)        // fitted document-topic proportion
-predict xb1, xb topic(1)       // estimateEffect linear prediction
-predict se1, stdp topic(1)     // its standard error
-list sporty theta1 p1 xb1 se1 in 1/3, noobs
+fastm text, k(2) seed(42) iters(50) replace
+assert "`e(marginsnotok)'" == "_ALL"
+capture noisily margins, predict(pr topic(1))
+assert _rc != 0
+
+display as result "margins metadata smoke OK"

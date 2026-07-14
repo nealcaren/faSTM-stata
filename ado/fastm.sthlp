@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.4.0  fastm}{...}
+{* *! version 0.6.0  fastm}{...}
 {vieweralsosee "" "--"}{...}
 {viewerjumpto "Syntax" "fastm##syntax"}{...}
 {viewerjumpto "Description" "fastm##description"}{...}
@@ -39,15 +39,16 @@ default {cmd:seed(42)}{p_end}
 {syntab:Text preprocessing}
 {synopt:{opt stop:words(spec)}}{cmd:none} (default), {cmd:english}, or a
 filename (one stopword per line){p_end}
-{synopt:{opt min:docfreq(#)}}drop terms appearing in fewer than # documents;
+{synopt:{opt min:docfreq(#)}}drop terms appearing in fewer than # documents
+(#>=1);
 default {cmd:mindocfreq(1)}{p_end}
 {synopt:{opt max:docpct(#)}}drop terms appearing in more than #% of documents;
-default {cmd:maxdocpct(100)}{p_end}
+must be in (0,100]; default {cmd:maxdocpct(100)}{p_end}
 {synopt:{opt nolow:ercase}}keep token case (default lowercases){p_end}
 
 {syntab:Diagnostics}
 {synopt:{opt held:out(#)}}also report held-out log-likelihood (document
-completion), holding out #% of each document's tokens{p_end}
+completion), holding out #% of each document's tokens; must be in [0,100){p_end}
 {synopt:{opt nstart(#)}}random restarts; keep the best bound (default 1 =
 deterministic spectral init){p_end}
 
@@ -105,7 +106,7 @@ topics a document is about; a content covariate explains how the words of a topi
 differ across groups. Combine with {opt prevalence()} and {opt spline()}.
 
 {phang}{opt iters(#)} caps the EM iterations (default 200); the fit stops earlier
-on convergence.
+on convergence. The value must be positive.
 
 {phang}{opt seed(#)} sets the random seed (default 42).
 
@@ -115,14 +116,36 @@ per line.
 
 {phang}{opt mindocfreq(#)} drops terms appearing in fewer than # documents
 (default 1, i.e. keep all). {opt maxdocpct(#)} drops terms appearing in more than
-#% of documents (default 100). Together these are the vocabulary trimming that R
+#% of documents (default 100). {opt mindocfreq()} must be at least 1, and
+{opt maxdocpct()} must be in (0,100]. Together these are the vocabulary trimming that R
 {cmd:stm}'s {cmd:prepDocuments} performs.
 
 {phang}{opt nolowercase} keeps tokens in their original case; by default tokens
 are lowercased before counting.
 
+{pstd}
+{cmd:fastm} does not stem. Neither does R {cmd:stm} by default, so the vocabularies
+are comparable out of the box; stem upstream if your application calls for it.
+
+{phang}{opt heldout(#)} also reports a held-out log-likelihood by document
+completion, holding out #% of each document's tokens and scoring the model on
+them. The value must be in [0,100); the result is returned in
+{cmd:e(heldout_ll)} per token. See {help searchk} to compare this across a range
+of {opt k()}.
+
+{phang}{opt nstart(#)} runs # random restarts and keeps the fit with the best
+evidence bound. The default, {cmd:nstart(1)}, uses the deterministic spectral
+initialization and so is reproducible without a seed sweep. Variational EM is
+nonconvex, so restarts guard against a poor local optimum.
+
 {phang}{opt generate(name)} sets the stub for the created topic-proportion
 variables (default {cmd:theta}).
+
+{phang}{opt saving(file[, replace])} writes the fitted topic-word probabilities
+and the vocabulary to a dataset, one row per term
+({cmd:word topic1} ... {cmd:topic}{it:K}). This is how the full beta matrix is
+recovered for custom labeling or for rankings deeper than {cmd:estat labels}
+reports.
 
 {phang}{opt replace} overwrites existing {it:generate}# variables.
 
@@ -169,12 +192,30 @@ variables (default {cmd:theta}).
 {synopt:{cmd:e(content)}}content variable (if any){p_end}
 {synopt:{cmd:e(prev_terms)}}expanded prevalence term names{p_end}
 {synopt:{cmd:e(generate)}}topic-proportion variable stub{p_end}
+{synopt:{cmd:e(properties)}}{cmd:b V}, or {cmd:nob noV} with no prevalence terms{p_end}
+{synopt:{cmd:e(predict)}}{cmd:fastm_predict}{p_end}
+{synopt:{cmd:e(estat_cmd)}}{cmd:fastm_estat}{p_end}
+{synopt:{cmd:e(marginsok)}}predictions allowed by {cmd:margins}{p_end}
+{synopt:{cmd:e(marginsnotok)}}predictions disallowed by {cmd:margins}{p_end}
+{synopt:{cmd:e(lbl_}{it:type}{cmd:_}{it:t}{cmd:)}}top 10 words of topic {it:t} for
+{it:type} = {cmd:prob}, {cmd:frex}, {cmd:lift}, {cmd:score}; replayed by
+{cmd:estat labels}{p_end}
+{synopt:{cmd:e(clev_}{it:g}{cmd:)}}label of content level {it:g} (content models){p_end}
+{synopt:{cmd:e(persp_}{it:g}{cmd:_}{it:t}{cmd:)}}top 10 words level {it:g} emphasizes
+in topic {it:t}; replayed by {cmd:estat perspectives}{p_end}
 
 {p2col 5 22 26 2: Matrices}{p_end}
-{synopt:{cmd:e(b)}}covariate-effect coefficients (one equation per topic){p_end}
-{synopt:{cmd:e(V)}}their covariance (block-diagonal by topic){p_end}
-{synopt:{cmd:e(gamma)}}prevalence coefficients (design x K-1){p_end}
 {synopt:{cmd:e(topiccorr)}}topic correlation matrix (K x K){p_end}
+{synopt:{cmd:e(b)}}covariate-effect coefficients (one equation per topic);
+{opt prevalence()} or {opt spline()} models only{p_end}
+{synopt:{cmd:e(V)}}their covariance (block-diagonal by topic); same models{p_end}
+{synopt:{cmd:e(gamma)}}prevalence coefficients (design x K-1); same models{p_end}
+
+{pstd}
+The label and perspective macros are stored with the estimates rather than in
+global macros, so {cmd:estat labels} and {cmd:estat perspectives} keep working
+after {cmd:estimates store} and {cmd:estimates restore}, and after another
+{cmd:fastm} fit.
 
 
 {marker postestimation}{...}
@@ -188,7 +229,12 @@ one equation per topic), so the usual tools apply:{p_end}
 {phang2}{cmd:. marginsplot}{p_end}
 
 {pstd}Representative documents for a topic (highest topic proportion):{p_end}
-{phang2}{cmd:. estat thoughts, topic(}{it:#}{cmd:)} [{cmd:n(}{it:#}{cmd:)}]{p_end}
+{phang2}{cmd:. estat thoughts, topic(}{it:#}{cmd:)} [{cmd:n(}{it:#}{cmd:) chars(}{it:#}{cmd:) detail}]{p_end}
+
+{pstd}
+{opt n(#)} sets how many documents to show (default 5). Each is printed as a
+wrapped excerpt of its first {opt chars(#)} characters (default 240); {opt detail}
+prints each document in full.{p_end}
 
 {pstd}Redisplay topic labels by score type ({cmd:prob}, {cmd:frex}, {cmd:lift},
 {cmd:score}):{p_end}
@@ -198,11 +244,42 @@ one equation per topic), so the usual tools apply:{p_end}
 topic (the per-group contrast):{p_end}
 {phang2}{cmd:. estat perspectives, topic(}{it:#}{cmd:)} [{cmd:n(}{it:#}{cmd:)}]{p_end}
 
+{pstd}
+{cmd:estat labels} and {cmd:estat perspectives} replay word lists that the fit
+stored, and the engine stores the top 10 words per topic per ranking. {cmd:n()}
+larger than 10 therefore shows 10 and says so. For a deeper ranking, export the
+full topic-word matrix with {opt saving()}.
+
 {pstd}{cmd:predict} after {cmd:fastm} (one topic per call):{p_end}
-{synoptset 30 tabbed}{...}
-{synopt:{cmd:predict} {it:nv}{cmd:, xb topic(}{it:#}{cmd:)}}estimateEffect linear prediction{p_end}
-{synopt:{cmd:predict} {it:nv}{cmd:, stdp topic(}{it:#}{cmd:)}}its standard error{p_end}
-{synopt:{cmd:predict} {it:nv}{cmd:, pr topic(}{it:#}{cmd:)}}prevalence-fitted proportion, softmax(X*gamma){p_end}
+{synoptset 34 tabbed}{...}
+{synopt:{cmd:predict} {it:nv}{cmd:, pr topic(}{it:#}{cmd:)}}posterior document-topic proportion for the fitted document{p_end}
+{synopt:{cmd:predict} {it:nv}{cmd:, xb} [{cmd:topic(}{it:#}{cmd:)}]}linear prediction from the posted topic-effect equation; requires {opt prevalence()} or {opt spline()}{p_end}
+{synopt:{cmd:predict} {it:nv}{cmd:, stdp} [{cmd:topic(}{it:#}{cmd:)}]}standard error of the linear prediction; requires {opt prevalence()} or {opt spline()}{p_end}
+{synopt:{cmd:predict} {it:nv}}{cmd:xb} after {opt prevalence()} or {opt spline()}; {cmd:pr} otherwise{p_end}
+
+{pstd}
+{opt topic(#)} names the topic. It is required with {cmd:pr}, which has no
+default topic. With {cmd:xb} and {cmd:stdp} it follows Stata's rule for
+multiequation models: an unspecified topic means the first one. The equivalent
+{opt equation(topic#)} may be given instead, and is what {cmd:margins} uses.
+
+{pstd}
+With {opt prevalence()} or {opt spline()}, {cmd:fastm} posts {cmd:e(b)} and
+{cmd:e(V)}. Without prevalence terms, {cmd:fastm} still stores {cmd:e(sample)}
+but posts no coefficient vector or covariance matrix.
+
+{pstd}
+For margins based on posted topic-effect coefficients, use the topic equation:
+{cmd:margins} {it:varlist}{cmd:, predict(equation(topic}{it:#}{cmd:))}. If
+Stata reports an estimability warning for a particular factor-variable design,
+add {cmd:noestimcheck}; the posted effects are method-of-composition summaries
+rather than parameters from a conventional likelihood.
+
+{pstd}
+For models with posted prevalence or spline effects, {cmd:e(marginsok)} allows
+{cmd:margins} for the default linear prediction and {cmd:xb}; {cmd:pr} and
+{cmd:stdp} are not allowed by {cmd:margins}. For models without posted effects,
+{cmd:e(marginsnotok)} is {cmd:_ALL}.
 
 
 {title:Author}

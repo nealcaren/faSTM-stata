@@ -44,10 +44,18 @@ machinery works:
 . lincom [topic5]year - [topic8]year
 . margins party, predict(equation(topic5))
 . marginsplot
-. predict tp5, pr topic(5)        // prevalence-fitted proportion
+. predict tp5, pr topic(5)        // fitted document-topic proportion
 . fastm                            // redisplay the last fit
 . help fastm
 ```
+
+For posted topic-effect margins, add Stata's `noestimcheck` option only if a
+particular factor-variable design triggers an estimability warning. The effects
+are method-of-composition summaries rather than parameters from a conventional
+linear model.
+For prevalence/spline models, bare `predict` follows Stata convention and returns
+the topic-1 linear prediction; use `predict ..., pr topic(#)` for fitted
+document-topic proportions.
 
 ## Features
 
@@ -65,8 +73,8 @@ machinery works:
   coherence, exclusivity (stm-faithful, computed in the engine).
 - **estimateEffect**: covariate effects on topic proportions, posted as
   `e(b)` / `e(V)`, so `test`, `lincom`, `margins`, and `marginsplot` all work.
-- **predict** (xtreg-style): `pr` (model prevalence-fitted proportion), `xb`,
-  `stdp`, with `topic(#)`.
+- **predict** (xtreg-style): `pr` for fitted document-topic proportions after
+  any model, plus `xb` and `stdp` for prevalence/spline models.
 - **`searchk`**: choose K by held-out document completion (held-out
   log-likelihood + coherence + exclusivity + bound) in `r(table)`.
 - **Save the model**: `saving()` writes topic-word probabilities + vocabulary to
