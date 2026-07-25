@@ -179,8 +179,12 @@ fn heldout_completion(
     let prev: Option<Vec<Vec<f64>>> =
         prevalence_full.map(|pf| keep.iter().map(|&di| pf[di].clone()).collect());
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    // content_time_rw=None, content_prior_var=1.0, content_l1=0.0 reproduce the
+    // pre-content-prior engine (v0.32.0's optimize_content used prior_variance=1.0;
+    // content_l1=0 is the original L-BFGS L2 solve, bit-exact). No content covariate
+    // here anyway.
     let model = fit_ctm(
-        &train, k, v, em_iters, 1e-5, 0.0, prev.as_deref(), None, true, None,
+        &train, k, v, em_iters, 1e-5, 0.0, prev.as_deref(), None, None, 1.0, 0.0, true, None,
         GammaPrior::Pooled, false, false, &mut rng,
     );
     let theta = model.doc_topics();
@@ -362,9 +366,12 @@ fn fit_op(a: &[String]) -> c_int {
     // nstart==1 (default): deterministic spectral init.
     let model: CtmModel = if nstart <= 1 {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        // content_time_rw=None, content_prior_var=1.0, content_l1=0.0: keep the
+        // pre-content-prior content solve (see fit-op above); the fixes we want are
+        // the engine's, not new knobs.
         fit_ctm(
             &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), content_arg,
-            true, None, GammaPrior::Pooled, want_effects, false, &mut rng,
+            None, 1.0, 0.0, true, None, GammaPrior::Pooled, want_effects, false, &mut rng,
         )
     } else {
         let mut best: Option<CtmModel> = None;
@@ -372,7 +379,7 @@ fn fit_op(a: &[String]) -> c_int {
             let mut rng = ChaCha8Rng::seed_from_u64(seed.wrapping_add(s as u64));
             let m = fit_ctm(
                 &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), content_arg,
-                false, None, GammaPrior::Pooled, want_effects, false, &mut rng,
+                None, 1.0, 0.0, false, None, GammaPrior::Pooled, want_effects, false, &mut rng,
             );
             if best.as_ref().map_or(true, |b| m.bound > b.bound) {
                 best = Some(m);
