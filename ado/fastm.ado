@@ -24,6 +24,10 @@ program fastm, eclass
         exit 198
     }
     confirm string variable `varlist'
+    if `seed' < 0 {
+        di as error "seed() must be a non-negative integer"
+        exit 198
+    }
     if `iters' < 1 {
         di as error "iters() must be positive"
         exit 198
@@ -123,6 +127,17 @@ program fastm, eclass
         markout `touse' `prevvars'
     }
 
+    // Fold content()'s missing rows into `touse' BEFORE the spline basis is built,
+    // so knots land on the final estimation sample (stm does listwise deletion
+    // before forming s()). The content block below re-derives its group codes on
+    // this same narrowed sample. (Empty documents are dropped later by the engine
+    // and cannot be excluded at this stage.)
+    if "`content'" != "" {
+        tempvar _cmiss
+        quietly egen `_cmiss' = group(`content') if `touse'
+        markout `touse' `_cmiss'
+    }
+
     // spline(varlist [, df(#) degree(#)]): B-spline basis of a continuous
     // covariate (stm's s()). For each variable, df basis columns are added to
     // the prevalence design. Matches stm's design space (same quantile knots).
@@ -149,14 +164,27 @@ program fastm, eclass
             confirm numeric variable `sv'
         }
         markout `touse' `svars'
+        // The basis columns must be PERMANENT variables named exactly as their
+        // e(b) coefficients (`<var>_s<j>`): predict xb/stdp and margins call
+        // Stata's _predict, which evaluates x*b against dataset variables. As
+        // tempvars they vanished on exit, so post-estimation broke with r(111).
+        // They carry values only on e(sample) (missing elsewhere), like the fit.
         foreach sv of local svars {
             local sbv ""
             forvalues j = 1/`sdf' {
-                tempvar bs`sv'`j'
-                quietly generate double `bs`sv'`j'' = .
-                local sbv `sbv' `bs`sv'`j''
-                local prevvars  `prevvars'  `bs`sv'`j''
-                local collabels `collabels' `sv'_s`j'
+                local bsname `sv'_s`j'
+                capture confirm new variable `bsname'
+                if _rc {
+                    if "`replace'" == "" {
+                        di as error "`bsname' (spline basis) already exists; use replace or rename `sv'"
+                        exit 110
+                    }
+                    quietly drop `bsname'
+                }
+                quietly generate double `bsname' = .
+                local sbv `sbv' `bsname'
+                local prevvars  `prevvars'  `bsname'
+                local collabels `collabels' `bsname'
             }
             mata: fastm_bs("`sv'", "`touse'", "`sbv'", `sdf', `sdeg')
         }
@@ -197,12 +225,18 @@ program fastm, eclass
 
     local nprev : word count `prevvars'
 
-    forvalues t = 1/`k' {
-        capture confirm new variable `generate'`t'
-        if _rc & "`replace'" == "" {
-            di as error "`generate'`t' already exists; use replace or a different generate()"
-            exit 110
+    // Validate ALL target names first, then create -- so a conflict on topic t
+    // does not leave topics 1..t-1 already written to the user's data.
+    if "`replace'" == "" {
+        forvalues t = 1/`k' {
+            capture confirm new variable `generate'`t'
+            if _rc {
+                di as error "`generate'`t' already exists; use replace or a different generate()"
+                exit 110
+            }
         }
+    }
+    forvalues t = 1/`k' {
         capture drop `generate'`t'
         quietly generate double `generate'`t' = .
     }

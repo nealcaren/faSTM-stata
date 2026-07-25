@@ -8,6 +8,10 @@ program searchk, rclass
           SEED(integer 42) ITERs(integer 200) ]
 
     confirm string variable `varlist'
+    if `seed' < 0 {
+        di as error "seed() must be a non-negative integer"
+        exit 198
+    }
     if `iters' < 1 {
         di as error "iters() must be positive"
         exit 198

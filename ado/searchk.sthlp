@@ -20,7 +20,8 @@
 {synoptline}
 {synopt:{opt k(numlist)}}topic counts to evaluate (each >=2); required{p_end}
 {synopt:{opt held:out(#)}}percent of each document's tokens held out; default
-{cmd:heldout(50)}; must be in (0,100){p_end}
+{cmd:heldout(50)}; the effective fraction is clamped to [5,95]% so both training
+and held-out tokens remain{p_end}
 {synopt:{opt preval:ence(varlist)}}prevalence covariates (factor variables allowed){p_end}
 {synopt:{opt seed(#)} {opt iter:s(#)}}as in {help fastm:fastm}{p_end}
 {synopt:{it:prep options}}{opt stop:words()}, {opt min:docfreq()},
