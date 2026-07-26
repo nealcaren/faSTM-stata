@@ -1,4 +1,4 @@
-*! fastm 0.6.0  Structural Topic Models in Stata (engine: topica-core, Rust)
+*! fastm 0.7.0  Structural Topic Models in Stata (engine: topica-core, Rust)
 *! fastm textvar [if] [in], k(#) [prevalence(fvvarlist) seed(#) iters(#) generate(name) replace]
 program fastm, eclass
     version 15.0

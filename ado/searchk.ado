@@ -1,4 +1,4 @@
-*! searchk 0.2.0  K selection for fastm (held-out likelihood + coherence/exclusivity)
+*! searchk 0.3.0  K selection for fastm (held-out likelihood + coherence/exclusivity)
 *! searchk textvar [if] [in], k(numlist) [prevalence(...) heldout(#) <prep opts>]
 program searchk, rclass
     version 15.0

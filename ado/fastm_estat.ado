@@ -1,4 +1,4 @@
-*! fastm_estat 0.6.0  estat dispatch for fastm (labels, thoughts, perspectives)
+*! fastm_estat 0.7.0  estat dispatch for fastm (labels, thoughts, perspectives)
 *! In its own ado so Stata can autoload it when estat is called after fastm.
 
 // estat dispatch (registered via e(estat_cmd)). Supports: thoughts.
