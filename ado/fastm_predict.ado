@@ -1,4 +1,4 @@
-*! fastm_predict 0.6.0  predict handler for fastm (pr / xb / stdp)
+*! fastm_predict 0.7.0  predict handler for fastm (pr / xb / stdp)
 *! In its own ado so Stata can autoload it when predict/margins is called.
 
 // predict after fastm (xtreg-style). One topic per call via topic(#).

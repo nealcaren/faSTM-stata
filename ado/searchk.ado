@@ -1,4 +1,4 @@
-*! searchk 0.2.0  K selection for fastm (held-out likelihood + coherence/exclusivity)
+*! searchk 0.3.0  K selection for fastm (held-out likelihood + coherence/exclusivity)
 *! searchk textvar [if] [in], k(numlist) [prevalence(...) heldout(#) <prep opts>]
 program searchk, rclass
     version 15.0
@@ -76,8 +76,8 @@ program searchk, rclass
 
     local nk : word count `k'
     tempname SK
-    matrix `SK' = J(`nk', 5, .)
-    matrix colnames `SK' = K heldout_ll coherence exclusivity bound
+    matrix `SK' = J(`nk', 6, .)
+    matrix colnames `SK' = K heldout_ll coherence exclusivity bound residuals
 
     local r 0
     local rn ""
@@ -91,6 +91,7 @@ program searchk, rclass
         matrix `SK'[`r',3] = scalar(fastm_sk_coh)
         matrix `SK'[`r',4] = scalar(fastm_sk_excl)
         matrix `SK'[`r',5] = scalar(fastm_sk_bound)
+        matrix `SK'[`r',6] = scalar(fastm_sk_resid)
     }
     capture macro drop fastm_stopfile
     capture macro drop fastm_betafile
@@ -99,7 +100,8 @@ program searchk, rclass
     di ""
     di as txt "fastm model selection" ///
         _col(40) "held-out: " as res %4.0f `heldout' as txt "% of tokens per doc"
-    di as txt "(higher held-out LL and coherence are better)"
+    di as txt "(higher held-out LL and coherence are better; residuals near 1 are" ///
+        _n "  better -- residuals >> 1 suggest K is too small, Taddy 2012)"
     matlist `SK', border(rows) format(%10.3f)
     return matrix table = `SK'
     return local cmd "searchk"
