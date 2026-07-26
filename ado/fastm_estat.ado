@@ -91,6 +91,12 @@ program fastm_labels
         exit 198
     }
     local kk = e(k)
+    // topic(0) means "all"; anything else must be a real topic (thoughts and
+    // perspectives already guard this -- labels silently showed nothing).
+    if `topic' < 0 | `topic' > `kk' {
+        di as error "topic() must be in 1..`kk'"
+        exit 198
+    }
     local stored : word count `e(lbl_`type'_1)'
     fastm_clamp_n `n' `stored'
     local n = r(n)
@@ -142,9 +148,11 @@ program fastm_thoughts
     local txt `e(textvar)'
 
     preserve
-    quietly keep if e(sample)
+    // Number rows in the ORIGINAL dataset before subsetting, so the reported
+    // "(observation #)" points at the user's row, not the e(sample) sub-index.
     tempvar obs
     generate long `obs' = _n
+    quietly keep if e(sample)
     gsort -`tv'
     local nshow = min(`n', _N)
 

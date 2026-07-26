@@ -20,7 +20,7 @@ if [ ! -x "$STATA" ]; then
     [ -n "$STATA" ] || { echo "no Stata found; set STATA=/path/to/stata" >&2; exit 1; }
 fi
 
-TESTS=(api_cleanup_smoke predict_smoke margins_metadata_smoke estat_restore_smoke searchk_smoke)
+TESTS=(api_cleanup_smoke predict_smoke margins_metadata_smoke estat_restore_smoke searchk_smoke fidelity_fixes_smoke)
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT

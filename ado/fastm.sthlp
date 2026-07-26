@@ -48,7 +48,8 @@ must be in (0,100]; default {cmd:maxdocpct(100)}{p_end}
 
 {syntab:Diagnostics}
 {synopt:{opt held:out(#)}}also report held-out log-likelihood (document
-completion), holding out #% of each document's tokens; must be in [0,100){p_end}
+completion), holding out #% of each document's tokens; {cmd:0} disables it and
+the effective fraction is capped at 95% so training tokens remain{p_end}
 {synopt:{opt nstart(#)}}random restarts; keep the best bound (default 1 =
 deterministic spectral init){p_end}
 
@@ -96,8 +97,13 @@ design is expanded with base/omitted levels dropped, and an intercept is added.
 continuous covariate to the prevalence design, the way R {cmd:stm}'s {cmd:s()}
 does. Defaults match {cmd:stm}: {cmd:df(10)}, {cmd:degree(3)}, with interior knots
 at sample quantiles. The basis columns ({it:var}{cmd:_s1}, {it:var}{cmd:_s2}, ...)
-enter {cmd:e(b)} like any other prevalence term, so {cmd:test} and {cmd:lincom}
-work on them. Combine with {opt prevalence()} for mixed designs.
+are added to the dataset (on {cmd:e(sample)}) and enter {cmd:e(b)} like any other
+prevalence term, so {cmd:test}, {cmd:lincom}, {cmd:predict}, and {cmd:margins}
+work on them. They persist after the command; {opt replace} overwrites existing
+ones. {cmd:margins} with {opt at()} that {it:varies the splined covariate itself}
+is not supported (the basis columns are ordinary variables, not derived from
+{it:var}), so vary the {it:var}{cmd:_s#} columns or use held covariate values.
+Combine with {opt prevalence()} for mixed designs.
 
 {phang}{opt content(varname)} adds a content covariate: a single categorical
 variable whose levels shift the topic-word distributions, via the SAGE content
