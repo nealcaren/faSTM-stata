@@ -37,8 +37,10 @@ and held-out tokens remain{p_end}
 reports diagnostics for choosing K, using the same engine and preprocessing as
 {cmd:fastm}. For each K it holds out a fraction of every document's tokens, fits
 on the rest, and scores the held-out tokens (document completion). It reports the
-held-out log-likelihood per token, mean semantic coherence, mean exclusivity, and
-the final bound. Higher held-out likelihood and coherence are better; the choice
+held-out log-likelihood per token, mean semantic coherence, mean exclusivity, the
+final bound, and the residual dispersion (stm's {cmd:searchK} residuals, Taddy
+2012: ~1 is well-fit, {bf:>>} 1 suggests K is too small). Higher held-out
+likelihood and coherence are better, and residuals nearer 1 are better; the choice
 of K is left to you.
 
 {marker examples}{...}
@@ -60,8 +62,8 @@ of K is left to you.
 
 {p2col 5 22 26 2: Matrices}{p_end}
 {synopt:{cmd:r(table)}}one row per K, with columns {cmd:k}, held-out
-log-likelihood per token, mean semantic coherence, mean exclusivity, and the
-final bound{p_end}
+log-likelihood per token, mean semantic coherence, mean exclusivity, the
+final bound, and residual dispersion{p_end}
 
 
 {title:Also see}

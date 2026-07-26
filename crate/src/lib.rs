@@ -143,7 +143,7 @@ pub extern "C" fn fastm_entry(argc: c_int, argv: *const *const c_char) -> c_int 
 /// tokens (deterministic by seed), fits on the train tokens, scores the held-out
 /// tokens. `prevalence_full` is the design aligned to `corpus.docs` (kept rows are
 /// selected internally). Returns (heldout_ll_per_token, n_test, bound, mean_coh,
-/// mean_excl).
+/// mean_excl, resid_dispersion).
 fn heldout_completion(
     corpus: &topica_core::corpus::Corpus,
     k: usize,
@@ -151,7 +151,7 @@ fn heldout_completion(
     prevalence_full: Option<&[Vec<f64>]>,
     heldout: f64,
     seed: u64,
-) -> (f64, u64, f64, f64, f64) {
+) -> (f64, u64, f64, f64, f64, f64) {
     let v = corpus.num_types();
     let mut split_rng = ChaCha8Rng::seed_from_u64(seed ^ 0x5EED_5EED_5EED_5EED);
     let mut train: Vec<Vec<u32>> = Vec::new();
@@ -175,7 +175,7 @@ fn heldout_completion(
     }
     let dd = train.len();
     if dd < 2 {
-        return (0.0, 0, 0.0, 0.0, 0.0);
+        return (0.0, 0, 0.0, 0.0, 0.0, 0.0);
     }
     let prev: Option<Vec<Vec<f64>>> =
         prevalence_full.map(|pf| keep.iter().map(|&di| pf[di].clone()).collect());
@@ -205,12 +205,17 @@ fn heldout_completion(
     let mm = 10usize.min(v);
     let coh = inspect::semantic_coherence(&model.beta, &train, mm);
     let excl = inspect::exclusivity(&model.beta, mm, 0.7);
+    // stm searchK's residual-dispersion diagnostic (Taddy 2012, tol=0.01): ~1 is a
+    // well-fit K, >1 suggests K is too small. Computed on the same held-out-train
+    // fit as coherence/exclusivity above.
+    let resid = inspect::residual_dispersion(&model.beta, &theta, &train, 0.01).dispersion;
     (
         ll,
         n_test,
         model.bound,
         coh.iter().sum::<f64>() / k as f64,
         excl.iter().sum::<f64>() / k as f64,
+        resid,
     )
 }
 
@@ -376,7 +381,14 @@ fn fit_op(a: &[String]) -> c_int {
             DEFAULT_PROJ_THRESHOLD, &mut rng,
         )
     } else {
+        // Random multi-start (stm selectModel). We keep the best-bound model, but
+        // also report each candidate's bound + mean coherence + mean exclusivity so
+        // the user sees the frontier instead of a silently-chosen winner. The
+        // per-start diagnostics land in the Stata matrix `fastm_ns` (row = start),
+        // which the ado pre-creates as nstart x 3.
+        let mm = 10usize.min(v);
         let mut best: Option<CtmModel> = None;
+        let mut best_s = 0usize;
         for s in 0..nstart {
             let mut rng = ChaCha8Rng::seed_from_u64(seed.wrapping_add(s as u64));
             let m = fit_ctm(
@@ -384,13 +396,19 @@ fn fit_op(a: &[String]) -> c_int {
                 None, 1.0, 0.0, false, None, GammaPrior::Pooled, want_effects, false,
                 DEFAULT_PROJ_THRESHOLD, &mut rng,
             );
+            let coh = inspect::semantic_coherence(&m.beta, &corpus.docs, mm);
+            let excl = inspect::exclusivity(&m.beta, mm, 0.7);
+            mat_store("fastm_ns", s + 1, 1, m.bound);
+            mat_store("fastm_ns", s + 1, 2, coh.iter().sum::<f64>() / k as f64);
+            mat_store("fastm_ns", s + 1, 3, excl.iter().sum::<f64>() / k as f64);
             if best.as_ref().map_or(true, |b| m.bound > b.bound) {
                 best = Some(m);
+                best_s = s;
             }
         }
         say(&format!(
-            "fastm: nstart={} random inits; kept the best bound\n",
-            nstart
+            "fastm: nstart={} random inits; kept start {} (best bound); per-start diagnostics in e(nstart_diag)\n",
+            nstart, best_s + 1
         ));
         best.unwrap()
     };
@@ -399,7 +417,7 @@ fn fit_op(a: &[String]) -> c_int {
     // heldout(): document-completion held-out log-likelihood for this fit (a
     // separate train/test split + fit; the reported model above uses all tokens).
     if heldout > 0.0 {
-        let (hll, hn, _, _, _) =
+        let (hll, hn, _, _, _, _) =
             heldout_completion(&corpus, k, em_iters, prevalence.as_deref(), heldout, seed);
         if hn > 0 {
             save_scalar("fastm_heldout", hll);
@@ -681,7 +699,7 @@ fn searchk_op(a: &[String]) -> c_int {
         None
     };
 
-    let (heldout_ll, n_test, bound, mean_coh, mean_excl) =
+    let (heldout_ll, n_test, bound, mean_coh, mean_excl, resid) =
         heldout_completion(&corpus, k, em_iters, prevalence.as_deref(), heldout, seed);
     if n_test == 0 {
         err("fastm: too few documents/tokens after the held-out split\n");
@@ -691,6 +709,7 @@ fn searchk_op(a: &[String]) -> c_int {
     save_scalar("fastm_sk_bound", bound);
     save_scalar("fastm_sk_coh", mean_coh);
     save_scalar("fastm_sk_excl", mean_excl);
+    save_scalar("fastm_sk_resid", resid);
     say(&format!(
         "fastm: searchk K={} done (held-out LL={:.4}, {} test tokens)\n",
         k, heldout_ll, n_test

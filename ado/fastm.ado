@@ -244,6 +244,14 @@ program fastm, eclass
     // Topic correlation matrix (filled by the plugin) -> e(topiccorr).
     matrix fastm_tc = J(`k', `k', .)
 
+    // Multi-start diagnostics: one row per random start (bound / coherence /
+    // exclusivity), filled by the plugin -> e(nstart_diag). Only the best-bound
+    // start is kept, but reporting all lets the user judge the frontier.
+    if `nstart' > 1 {
+        matrix fastm_ns = J(`nstart', 3, .)
+        matrix colnames fastm_ns = bound coherence exclusivity
+    }
+
     // estimateEffect outputs: e(b) row (1 x k*nprev), e(V) (k*nprev square).
     if `nprev' > 0 {
         local pe = `k' * (`nprev' + 1)
@@ -342,6 +350,20 @@ program fastm, eclass
     matrix rownames fastm_tc = `tn'
     matrix colnames fastm_tc = `tn'
     ereturn matrix topiccorr = fastm_tc
+
+    // Multi-start diagnostics table -> e(nstart_diag); shown so the kept model is
+    // not a silent choice.
+    if `nstart' > 1 {
+        local sn ""
+        forvalues s = 1/`nstart' {
+            local sn `sn' start`s'
+        }
+        matrix rownames fastm_ns = `sn'
+        di ""
+        di as txt "Multi-start diagnostics (kept the best bound):"
+        matlist fastm_ns, border(rows) format(%10.3f)
+        ereturn matrix nstart_diag = fastm_ns
+    }
 
     if `nprev' > 0 {
         local gcols ""
