@@ -21,14 +21,13 @@ crate-type = ["staticlib"]
 # topica repo as a sibling. For local engine development, crate/.cargo/config.toml
 # (gitignored) overrides this with the local path. Pin to a tag/rev for releases.
 # default-features = false keeps serde out (vendorable).
-# INTERIM PIN: moved off tag v0.32.0 to pick up post-v0.32.0 engine fixes that reach
-# fastm's existing surface (batch fit_ctm + SAGE content + effects): topica #442
-# (per-doc ν recompute for content models), #432 (empty-doc θ from the prior mode),
-# #445 (non-PD Σ inverse/log-det consistency). None of the new content_time/l1 knobs
-# are exposed here (fit_ctm is called with content_time_rw=None, content_prior_var=1.0,
-# content_l1=0.0 -> the v0.32.0 content solve, bit-exact). v0.34.0 predates these fixes,
-# so a rev pin is the reproducible interim until a tag containing them is cut.
-# TODO(release): swap `rev` for `tag = "vX.Y.Z"` once that tag exists.
-topica-core = { git = "https://github.com/nealcaren/topica", rev = "67d98d5e754fda19f0bcc6d1da736f3f48f5c1ee", default-features = false }
+# Pinned to v0.50.0, which carries the engine fixes that reach fastm's existing
+# surface (batch fit_ctm + SAGE content + effects): topica #442 (per-doc ν recompute
+# for content models), #432 (empty-doc θ from the prior mode), #445 (non-PD Σ
+# inverse/log-det consistency), and #542 (spectral projection threshold default 10000
+# = R stm parity). None of the new content_time/l1 knobs are exposed: fit_ctm is called
+# with content_time_rw=None, content_prior_var=1.0, content_l1=0.0 -> the v0.32.0
+# content solve, bit-exact, and spectral_proj_threshold = DEFAULT_PROJ_THRESHOLD.
+topica-core = { git = "https://github.com/nealcaren/topica", tag = "v0.50.0", default-features = false }
 rand = "0.8"
 rand_chacha = "0.3"   # ChaCha8Rng, same stream as topica-core

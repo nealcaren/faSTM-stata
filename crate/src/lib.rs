@@ -14,6 +14,7 @@ use rand_chacha::ChaCha8Rng;
 use std::path::Path;
 use topica_core::corpus::{from_texts, load_stoplist, LoadOptions};
 use topica_core::ctm::{fit_ctm, CtmModel, GammaPrior};
+use topica_core::spectral::DEFAULT_PROJ_THRESHOLD;
 use topica_core::{effects, inspect};
 
 // Defined in shim.c (thin wrappers over the SF_* macros).
@@ -182,10 +183,10 @@ fn heldout_completion(
     // content_time_rw=None, content_prior_var=1.0, content_l1=0.0 reproduce the
     // pre-content-prior engine (v0.32.0's optimize_content used prior_variance=1.0;
     // content_l1=0 is the original L-BFGS L2 solve, bit-exact). No content covariate
-    // here anyway.
+    // here anyway. DEFAULT_PROJ_THRESHOLD keeps spectral init at stm parity.
     let model = fit_ctm(
         &train, k, v, em_iters, 1e-5, 0.0, prev.as_deref(), None, None, 1.0, 0.0, true, None,
-        GammaPrior::Pooled, false, false, &mut rng,
+        GammaPrior::Pooled, false, false, DEFAULT_PROJ_THRESHOLD, &mut rng,
     );
     let theta = model.doc_topics();
     let mut sum_lp = 0.0f64;
@@ -371,7 +372,8 @@ fn fit_op(a: &[String]) -> c_int {
         // the engine's, not new knobs.
         fit_ctm(
             &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), content_arg,
-            None, 1.0, 0.0, true, None, GammaPrior::Pooled, want_effects, false, &mut rng,
+            None, 1.0, 0.0, true, None, GammaPrior::Pooled, want_effects, false,
+            DEFAULT_PROJ_THRESHOLD, &mut rng,
         )
     } else {
         let mut best: Option<CtmModel> = None;
@@ -379,7 +381,8 @@ fn fit_op(a: &[String]) -> c_int {
             let mut rng = ChaCha8Rng::seed_from_u64(seed.wrapping_add(s as u64));
             let m = fit_ctm(
                 &corpus.docs, k, v, em_iters, 1e-5, 0.0, prevalence.as_deref(), content_arg,
-                None, 1.0, 0.0, false, None, GammaPrior::Pooled, want_effects, false, &mut rng,
+                None, 1.0, 0.0, false, None, GammaPrior::Pooled, want_effects, false,
+                DEFAULT_PROJ_THRESHOLD, &mut rng,
             );
             if best.as_ref().map_or(true, |b| m.bound > b.bound) {
                 best = Some(m);
